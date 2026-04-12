@@ -1,17 +1,10 @@
 import { useState, useEffect } from "react";
 import { DEFAULT_TASKS } from "../data/tasks";
-import { DEFAULT_BOSSES } from "../data/bosses";
-
-const BOSSES_DATA = DEFAULT_BOSSES.map(b => ({
-  id: b.id,
-  name: b.name,
-  maxHp: b.maxHp,
-  img: `/bosses/${b.id}.png`,
-}));
+import { BOSSES_DATA } from "../data/bosses";
 
 export function AdminPanel({ onStart }) {
   const [tab, setTab] = useState("bosses");
-  const [selBosses, setSelBosses] = useState(["b035", "b018"]);
+  const [selBosses, setSelBosses] = useState(["zulrah", "vorkath"]);
   const [teamCount, setTeamCount] = useState(2);
   const [teamNames, setTeamNames] = useState(["Team Alpha", "Team Bravo", "Team Charlie", "Team Delta", "Team Echo", "Team Foxtrot"]);
   const [dMin, setDMin] = useState(50);

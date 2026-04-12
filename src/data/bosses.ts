@@ -1,4 +1,4 @@
-export const BOSSES_DATA = [
+export const DEFAULT_BOSSES = [
   { id: "jad",       name: "TzTok-Jad",        maxHp: 250,  img: "/bosses/jad.png" },
   { id: "kril",      name: "K'ril Tsutsaroth", maxHp: 256,  img: "/bosses/kril.png" },
   { id: "kreearra",  name: "Kree'arra",        maxHp: 280,  img: "/bosses/kreearra.png" },
@@ -19,3 +19,5 @@ export const BOSSES_DATA = [
   { id: "tob",      name: "Verzik Vitur",     maxHp: 1800, img: "/bosses/tob.png" },
   { id: "corp",     name: "Corp Beast",       maxHp: 2000, img: "/bosses/corp.png" },
 ];
+
+export const BOSSES_DATA = DEFAULT_BOSSES;

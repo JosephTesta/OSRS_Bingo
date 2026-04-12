@@ -15,10 +15,12 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
   }, [tile.id, tile.isNew]);
 
   const isDone = tile.flipped || tile.completed;
-  const showBack = !isDone;
+  const showBack = isDone;
   const clickable = !noClick && !isDone;
 
   const showCompletedOutline = isDone && (isCompletedPosition || isLineCompleted);
+
+  const showOutline = isCompletedPosition || isLineCompleted;
 
   return (
     <div
@@ -26,9 +28,9 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
       style={{
         width: "100%",
         aspectRatio: "1",
-        outline: isDone ? (isLineCompleted ? "2px solid #f59e0b" : "2px solid #c8a951") : "none",
-        outlineOffset: isDone ? "2px" : "0",
-        boxShadow: isDone ? (isLineCompleted ? "0 0 10px rgba(245,158,11,0.6)" : "0 0 8px rgba(200,168,75,0.5)") : "none",
+        outline: showOutline ? (isLineCompleted ? "2px solid #f59e0b" : "2px solid #c8a951") : "none",
+        outlineOffset: showOutline ? "2px" : "0",
+        boxShadow: showOutline ? (isLineCompleted ? "0 0 10px rgba(245,158,11,0.6)" : "0 0 8px rgba(200,168,75,0.5)") : "none",
       }}
       onClick={() => clickable && onComplete(r, c)}
     >
