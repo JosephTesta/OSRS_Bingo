@@ -64,4 +64,4 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
       </div>
     </div>
   );
-}
+}                         

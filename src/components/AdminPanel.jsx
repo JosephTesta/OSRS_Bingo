@@ -11,6 +11,9 @@ export function AdminPanel({ onStart }) {
   const [dMax, setDMax] = useState(200);
   const [dMinRaw, setDMinRaw] = useState("50");
   const [dMaxRaw, setDMaxRaw] = useState("200");
+  const [randomizeDamage, setRandomizeDamage] = useState(true);
+  const [fixedDamage, setFixedDamage] = useState(100);
+  const [fixedDamageRaw, setFixedDamageRaw] = useState("100");
   const [rowBonusDamage, setRowBonusDamage] = useState(50);
   const [enableRowBonus, setEnableRowBonus] = useState(true);
   const dRangeValid = dMin > 0 && dMax > 0 && dMin < dMax;
@@ -70,14 +73,15 @@ export function AdminPanel({ onStart }) {
     setTasks(val.split("\n").map(t => t.trim()).filter(Boolean));
   };
 
-  const canStart = selBosses.length > 0 && tasks.length >= 25 && dRangeValid;
+  const fixedDamageValid = !randomizeDamage && fixedDamage > 0;
+  const canStart = selBosses.length > 0 && tasks.length >= 25 && (dRangeValid || !randomizeDamage) && (randomizeDamage || fixedDamageValid);
 
   const handleStart = () => {
     if (!canStart) return;
     onStart({
       selectedBosses: BOSSES_DATA.filter(b => selBosses.includes(b.id)),
       teamNames: teamNames.slice(0, teamCount).map((n, i) => n.trim() || `Team ${i + 1}`),
-      settings: { dMin, dMax, replacement, sequential, rowBonusDamage, enableRowBonus, tasks },
+      settings: { dMin, dMax, randomizeDamage, fixedDamage, replacement, sequential, rowBonusDamage, enableRowBonus, tasks },
     });
   };
 
@@ -235,12 +239,38 @@ export function AdminPanel({ onStart }) {
 
         {tab === "settings" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+
             <div>
-              <p style={{ fontSize: 13, color: "#6a5030", marginBottom: 10 }}>
-                Tile Damage Range
-                {dRangeValid && <span style={{ color: "#c8a951" }}> — {dMin} to {dMax}</span>}
-              </p>
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={randomizeDamage} onChange={e => setRandomizeDamage(e.target.checked)} style={{ marginTop: 3 }} />
+                <div>
+                  <div style={{ fontSize: 14, color: "#c8a951" }}>Randomize Tile Points</div>
+                  <div style={{ fontSize: 12, color: "#5a4020" }}>{randomizeDamage ? "Each tile gets a random damage value between min and max" : "All tiles receive the same fixed damage amount"}</div>
+                </div>
+              </label>
+              {!randomizeDamage && (
+                <div style={{ marginLeft: 30, marginTop: 8, paddingLeft: 10, borderLeft: "2px solid rgba(200,168,75,0.2)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                    <span style={{ color: "#5a4020", width: 90 }}>Fixed Damage:</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={fixedDamageRaw}
+                      onChange={e => {
+                        const v = e.target.value.replace(/[^0-9]/g, "");
+                        setFixedDamageRaw(v);
+                        const n = parseInt(v, 10);
+                        if (!isNaN(n) && n >= 1) setFixedDamage(n);
+                      }}
+                      style={{ width: 80 }}
+                      placeholder="e.g. 100"
+                    />
+                  </label>
+                </div>
+              )}
+              {randomizeDamage && (
+                            <div>
+              <div style={{ display: "flex", gap: 16, marginLeft: 20, marginTop:5, alignItems: "flex-start", flexWrap: "wrap" }}>
                 {[
                   { lbl: "Min", raw: dMinRaw, other: dMax, setRaw: setDMinRaw, setVal: setDMin, isMin: true },
                   { lbl: "Max", raw: dMaxRaw, other: dMin, setRaw: setDMaxRaw, setVal: setDMax, isMin: false },
@@ -248,14 +278,16 @@ export function AdminPanel({ onStart }) {
                   const parsed = parseInt(raw, 10);
                   const isEmpty = raw.trim() === "";
                   const isInvalid = !isEmpty && (isNaN(parsed) || parsed < 1 || (isMin ? parsed >= other : parsed <= other));
+                  const isDisabled = !randomizeDamage;
                   return (
                     <div key={lbl}>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, opacity: isDisabled ? 0.5 : 1 }}>
                         <span style={{ color: "#5a4020", width: 28 }}>{lbl}</span>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={raw}
+                          disabled={isDisabled}
                           onChange={e => {
                             const v = e.target.value.replace(/[^0-9]/g, "");
                             setRaw(v);
@@ -266,18 +298,20 @@ export function AdminPanel({ onStart }) {
                           placeholder="e.g. 50"
                         />
                       </label>
-                      {isInvalid && (
+                      {!isDisabled && isInvalid && (
                         <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 36 }}>
                           {isMin ? (parsed >= other ? "Must be less than max" : "Must be at least 1") : parsed <= other ? "Must be greater than min" : "Must be at least 1"}
                         </p>
                       )}
-                      {isEmpty && <p style={{ fontSize: 11, color: "#7a5020", marginTop: 4, marginLeft: 36 }}>Enter a number</p>}
+                      {!isDisabled && isEmpty && <p style={{ fontSize: 11, color: "#7a5020", marginTop: 4, marginLeft: 36 }}>Enter a number</p>}
                     </div>
                   );
                 })}
               </div>
-              {!dRangeValid && !(dMinRaw.trim() === "" || dMaxRaw.trim() === "") && (
+              {randomizeDamage && !dRangeValid && !(dMinRaw.trim() === "" || dMaxRaw.trim() === "") && (
                 <p style={{ fontSize: 11, color: "#ef4444", marginTop: 8 }}>⚠ Min must be lower than Max before you can start.</p>
+              )}
+            </div>
               )}
             </div>
 
@@ -411,7 +445,7 @@ export function AdminPanel({ onStart }) {
         </button>
         {!canStart && (
           <p style={{ color: "#7a2a2a", fontSize: 12, marginTop: 8 }}>
-            {selBosses.length === 0 ? "Select at least one boss" : tasks.length < 25 ? "Need at least 25 tasks in pool" : "Fix damage range: Min must be a positive number less than Max"}
+            {selBosses.length === 0 ? "Select at least one boss" : tasks.length < 25 ? "Need at least 25 tasks in pool" : randomizeDamage ? "Fix damage range: Min must be a positive number less than Max" : "Set a valid fixed damage amount"}
           </p>
         )}
       </div>

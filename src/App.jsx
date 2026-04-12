@@ -17,17 +17,19 @@ const shuffle = arr => {
   return a;
 };
 
-const makeTile = (task, dMin, dMax, isNew = false) => ({
+const makeTile = (task, dMin, dMax, isNew = false, randomizeDamage = true, fixedDamage = 100) => ({
   id: uid(), task,
-  damage: randInt(dMin, dMax), flipped: false, completed: false, isNew,
+  damage: randomizeDamage ? randInt(dMin, dMax) : fixedDamage, flipped: false, completed: false, isNew,
+  pendingReplacement: null,
 });
 
-const makeBoard = (pool, dMin, dMax) => {
+const makeBoard = (pool, dMin, dMax, randomizeDamage = true, fixedDamage = 100) => {
   const picked = shuffle(pool).slice(0, 25);
   const board  = Array.from({ length: 5 }, (_, r) =>
     Array.from({ length: 5 }, (_, c) => ({
       id: uid(), task: picked[r * 5 + c],
-      damage: randInt(dMin, dMax), flipped: false, completed: false, isNew: false,
+      damage: randomizeDamage ? randInt(dMin, dMax) : fixedDamage, flipped: false, completed: false, isNew: false,
+      pendingReplacement: null,
     }))
   );
   return { board, exhaustedTasks: [...picked], completedPositions: Array(25).fill(false) };
@@ -36,12 +38,15 @@ const makeBoard = (pool, dMin, dMax) => {
 const makeBosses = (selectedBosses) =>
   selectedBosses.map(b => ({ ...b, currentHp: b.maxHp, defeated: false }));
 
+// Snapshot the team state exactly as-is — pendingReplacement is intentionally
+// included so that undo restores tiles mid-animation with their future task intact.
 const snapshotTeam = (t) => ({
   bosses:          t.bosses.map(b => ({ ...b })),
   activeBossIndex: t.activeBossIndex,
   board:           t.board.map(row => row.map(tile => ({ ...tile }))),
   exhaustedTasks:  [...t.exhaustedTasks],
-  completedPositions: [...(t.completedPositions || Array(25).fill(false))],
+  completedPositions:     [...(t.completedPositions || Array(25).fill(false))],
+  lineCompletedPositions: [...(t.lineCompletedPositions || Array(25).fill(false))],
 });
 
 const CSS = `
@@ -166,7 +171,7 @@ export default function App() {
   const handleStart = useCallback(({ selectedBosses, teamNames, settings }) => {
     setGs({
       teams: teamNames.map(name => {
-        const { board, exhaustedTasks } = makeBoard(settings.tasks, settings.dMin, settings.dMax);
+        const { board, exhaustedTasks } = makeBoard(settings.tasks, settings.dMin, settings.dMax, settings.randomizeDamage, settings.fixedDamage);
         return {
           id: uid(),
           name,
@@ -204,57 +209,47 @@ export default function App() {
 
     if (action.type === "UNDO") {
       const { teamId } = action;
-      Object.keys(timers.current).forEach(k => {
-        if (k.startsWith(teamId)) {
-          clearTimeout(timers.current[k]);
-          delete timers.current[k];
-        }
-      });
+      // Do NOT clear other tiles' timers here. Each timer guards itself:
+      //   if (!tile.flipped) return prev  — so undone tiles are skipped harmlessly.
+      // Clearing all team timers would kill pending timers for other already-flipped
+      // tiles, leaving them permanently stuck in the flipped/damage state.
       setGs(g => {
         if (!g) return g;
-        const teams = g.teams.map(t => {
-          if (t.id !== teamId) return t;
-          if (t.history.length === 0) return t;
-          const history  = [...t.history];
-          const snapshot = history.pop();
+        const team = g.teams.find(t => t.id === teamId);
+        if (!team || team.history.length === 0) return g;
 
-          const damagedBossIdx = snapshot.activeBossIndex;
-          const dmg_restored = snapshot.bosses[damagedBossIdx].currentHp - t.bosses[damagedBossIdx].currentHp;
+        const history = [...team.history];
+        const snapshot = history.pop();
 
-          let undoneTask = '';
-          for (let ri = 0; ri < t.board.length; ri++) {
-            for (let ci = 0; ci < t.board[ri].length; ci++) {
-              if (t.board[ri][ci].flipped && !snapshot.board[ri][ci].flipped) {
-                undoneTask = t.board[ri][ci].task;
-                break;
-              }
-            }
-            if (undoneTask) break;
-          }
+        const damagedBossIdx = snapshot.activeBossIndex;
+        const dmg_restored = snapshot.bosses[damagedBossIdx].currentHp - team.bosses[damagedBossIdx].currentHp;
 
-          const restoreLogEntry = {
-            id: uid(),
-            time: fmtTime(),
-            damage: dmg_restored,
-            boss: snapshot.bosses[damagedBossIdx].name,
-            task: undoneTask,
-            type: 'restore'
-          };
+        const restoreLogEntry = {
+          id: uid(),
+          time: fmtTime(),
+          damage: dmg_restored,
+          boss: snapshot.bosses[damagedBossIdx].name,
+          task: '',
+          type: 'restore',
+        };
 
-          return {
-            ...t,
-            bosses:          snapshot.bosses,
-            activeBossIndex: snapshot.activeBossIndex,
-            board:           snapshot.board,
-            exhaustedTasks:  snapshot.exhaustedTasks,
-            log:             [...t.log, restoreLogEntry],
-            damageFloats:    [],
-            history,
-          };
-        });
-        const winner = g.winner && teams.find(t => t.id === g.winner.id)?.bosses.every(b => b.defeated)
+        const updatedTeam = {
+          ...team,
+          bosses:                 snapshot.bosses,
+          activeBossIndex:        snapshot.activeBossIndex,
+          board:                  snapshot.board,
+          exhaustedTasks:         snapshot.exhaustedTasks,
+          completedPositions:     snapshot.completedPositions,
+          lineCompletedPositions: snapshot.lineCompletedPositions,
+          log:                    [...team.log, restoreLogEntry],
+          damageFloats:           [],
+          history,
+        };
+
+        const newTeams = g.teams.map(t => t.id === teamId ? updatedTeam : t);
+        const winner = g.winner && newTeams.find(t => t.id === g.winner.id)?.bosses.every(b => b.defeated)
           ? g.winner : null;
-        return { ...g, teams, winner, undoFlashTeamId: teamId };
+        return { ...g, teams: newTeams, winner, undoFlashTeamId: teamId };
       });
       setTimeout(() => setGs(g => g ? { ...g, undoFlashTeamId: null } : g), 600);
     }
@@ -267,56 +262,56 @@ export default function App() {
         const team = g.teams.find(t => t.id === teamId);
         if (!team) return g;
         const tile = team.board[r][c];
-        if (tile.flipped || tile.completed) return g;
+        const isReplaced = team.completedPositions?.[r * 5 + c];
+        if (tile.flipped || tile.completed || isReplaced) return g;
         const boss = team.bosses[team.activeBossIndex];
         if (!boss || boss.defeated) return g;
 
         let dmg = tile.damage;
         const floatId = uid();
 
-        const testBoard = team.board.map((row, ri) => 
+        const testBoard = team.board.map((row, ri) =>
           row.map((tl, ci) => ({ ...tl, flipped: tl.flipped || tl.completed || (team.completedPositions?.[ri * 5 + ci] ?? false) }))
         );
         testBoard[r][c] = { ...testBoard[r][c], flipped: true };
 
-        const existingLines = team.lineCompletedPositions || Array(25).fill(false);
-        const existingCompleted = team.completedPositions || Array(25).fill(false);
-        
-        const rowIdx = r * 5;
-        const rowIsCompleteNow = testBoard[r].every((t, ci) => t.flipped || existingCompleted[r * 5 + ci]);
-        const colIsCompleteNow = testBoard.every((row, ri) => row[c].flipped || existingCompleted[ri * 5 + c]);
+        const existingLines     = team.lineCompletedPositions || Array(25).fill(false);
+        const existingCompleted = team.completedPositions     || Array(25).fill(false);
+
+        const rowIsCompleteNow   = testBoard[r].every((t, ci) => t.flipped || existingCompleted[r * 5 + ci]);
+        const colIsCompleteNow   = testBoard.every((row, ri) => row[c].flipped || existingCompleted[ri * 5 + c]);
         const diag1IsCompleteNow = r === c && testBoard.every((row, i) => row[i].flipped || existingCompleted[i * 5 + i]);
         const diag2IsCompleteNow = (r + c === 4) && testBoard.every((row, i) => row[4-i].flipped || existingCompleted[i * 5 + (4-i)]);
-        
-        const rowWasComplete = existingLines.slice(rowIdx, rowIdx+5).every(p => p);
-        const colWasComplete = [0,1,2,3,4].every(i => existingLines[i*5+c]);
-        const diag1WasComplete = [0,1,2,3,4].every(i => existingLines[i*5+i]);
-        const diag2WasComplete = [0,1,2,3,4].every(i => existingLines[i*5+(4-i)]);
-        
+
+        const rowWasComplete   = existingLines.slice(r * 5, r * 5 + 5).every(p => p);
+        const colWasComplete   = [0,1,2,3,4].every(i => existingLines[i * 5 + c]);
+        const diag1WasComplete = [0,1,2,3,4].every(i => existingLines[i * 5 + i]);
+        const diag2WasComplete = [0,1,2,3,4].every(i => existingLines[i * 5 + (4 - i)]);
+
         let newCompletedLines = 0;
-        if (rowIsCompleteNow && !rowWasComplete) newCompletedLines++;
-        if (colIsCompleteNow && !colWasComplete) newCompletedLines++;
+        if (rowIsCompleteNow   && !rowWasComplete)   newCompletedLines++;
+        if (colIsCompleteNow   && !colWasComplete)   newCompletedLines++;
         if (diag1IsCompleteNow && !diag1WasComplete) newCompletedLines++;
         if (diag2IsCompleteNow && !diag2WasComplete) newCompletedLines++;
-        
-        const rowBonusEnabled = g.settings.enableRowBonus ?? true;
-        const bonusDamage = newCompletedLines > 0 && rowBonusEnabled ? newCompletedLines * g.settings.rowBonusDamage : 0;
-        const totalDmg = dmg + bonusDamage;
 
-        const logEntry = { 
-          id:uid(), 
-          time:fmtTime(), 
-          damage:totalDmg, 
-          bonusDamage: bonusDamage,
-          boss:boss.name, 
-          task:tile.task, 
-          type: 'damage' 
+        const rowBonusEnabled = g.settings.enableRowBonus ?? true;
+        const bonusDamage     = newCompletedLines > 0 && rowBonusEnabled ? newCompletedLines * g.settings.rowBonusDamage : 0;
+        const totalDmg        = dmg + bonusDamage;
+
+        const logEntry = {
+          id: uid(),
+          time: fmtTime(),
+          damage: totalDmg,
+          bonusDamage,
+          boss: boss.name,
+          task: tile.task,
+          type: 'damage',
         };
 
         const newBosses = team.bosses.map((b, i) => {
           if (i !== team.activeBossIndex) return b;
           const hp = Math.max(0, b.currentHp - totalDmg);
-          return { ...b, currentHp:hp, defeated:hp===0 };
+          return { ...b, currentHp: hp, defeated: hp === 0 };
         });
 
         let newActiveIdx = team.activeBossIndex;
@@ -325,11 +320,29 @@ export default function App() {
           if (next !== -1) newActiveIdx = next;
         }
 
-        const newFloat = { id:floatId, bossId:boss.id, damage:totalDmg,
-          leftPct:12+Math.random()*60, fontSize:13+Math.random()*8 };
+        // --- Eagerly compute replacement so it is captured in the next snapshot ---
+        // This ensures undo always restores tiles with their pending future task
+        // intact, rather than a stale flipped state with no task assigned.
+        let pendingReplacement = null;
+        let newExhaustedTasks  = team.exhaustedTasks;
+        if (g.settings.replacement) {
+          const available = g.settings.tasks.filter(task => !team.exhaustedTasks.includes(task));
+          if (available.length > 0) {
+            const newTask = available[randInt(0, available.length - 1)];
+            pendingReplacement = makeTile(newTask, g.settings.dMin, g.settings.dMax, true, g.settings.randomizeDamage, g.settings.fixedDamage);
+            newExhaustedTasks  = [...team.exhaustedTasks, newTask];
+          }
+        }
+
+        const newFloat = {
+          id: floatId, bossId: boss.id, damage: totalDmg,
+          leftPct: 12 + Math.random() * 60, fontSize: 13 + Math.random() * 8,
+        };
 
         const newBoard = team.board.map((row, ri) =>
-          row.map((tl, ci) => ri===r && ci===c ? { ...tl, flipped:true } : tl)
+          row.map((tl, ci) =>
+            ri === r && ci === c ? { ...tl, flipped: true, pendingReplacement } : tl
+          )
         );
 
         const newCompletedPositions = [...(team.completedPositions || Array(25).fill(false))];
@@ -337,88 +350,71 @@ export default function App() {
 
         const newLineCompletedPositions = [...(team.lineCompletedPositions || Array(25).fill(false))];
         if (newCompletedLines > 0) {
-          const rowIdx = r * 5;
-          
-          if (rowIsCompleteNow && !rowWasComplete) {
-            for (let ci = 0; ci < 5; ci++) newLineCompletedPositions[r * 5 + ci] = true;
-          }
-          if (colIsCompleteNow && !colWasComplete) {
-            for (let ri = 0; ri < 5; ri++) newLineCompletedPositions[ri * 5 + c] = true;
-          }
-          if (diag1IsCompleteNow && !diag1WasComplete) {
-            for (let i = 0; i < 5; i++) newLineCompletedPositions[i * 5 + i] = true;
-          }
-          if (diag2IsCompleteNow && !diag2WasComplete) {
-            for (let i = 0; i < 5; i++) newLineCompletedPositions[i * 5 + (4 - i)] = true;
-          }
+          if (rowIsCompleteNow   && !rowWasComplete)   for (let ci = 0; ci < 5; ci++) newLineCompletedPositions[r * 5 + ci]       = true;
+          if (colIsCompleteNow   && !colWasComplete)   for (let ri = 0; ri < 5; ri++) newLineCompletedPositions[ri * 5 + c]       = true;
+          if (diag1IsCompleteNow && !diag1WasComplete) for (let i  = 0; i  < 5; i++)  newLineCompletedPositions[i * 5 + i]        = true;
+          if (diag2IsCompleteNow && !diag2WasComplete) for (let i  = 0; i  < 5; i++)  newLineCompletedPositions[i * 5 + (4 - i)] = true;
         }
 
         const allBossesDefeated = newBosses.every(b => b.defeated);
 
         const updatedTeam = {
           ...team,
-          bosses:          newBosses,
-          activeBossIndex: newActiveIdx,
-          board:           newBoard,
-          completedPositions: newCompletedPositions,
+          bosses:                 newBosses,
+          activeBossIndex:        newActiveIdx,
+          board:                  newBoard,
+          exhaustedTasks:         newExhaustedTasks,
+          completedPositions:     newCompletedPositions,
           lineCompletedPositions: newLineCompletedPositions,
-          log:             [...team.log, logEntry],
-          damageFloats:    [...(team.damageFloats||[]), newFloat],
-          history:         [...team.history, snapshotTeam(team)],
+          log:                    [...team.log, logEntry],
+          damageFloats:           [...(team.damageFloats || []), newFloat],
+          history:                [...team.history, snapshotTeam(team)],
         };
 
-        const newTeams = g.teams.map(t => t.id === teamId ? updatedTeam : t);
-        const winnerTeam = !g.winner && allBossesDefeated ? updatedTeam : g.winner;
-        const newGs = { ...g, teams: newTeams, winner: winnerTeam || null };
+        const newTeams    = g.teams.map(t => t.id === teamId ? updatedTeam : t);
+        const winnerTeam  = !g.winner && allBossesDefeated ? updatedTeam : g.winner;
+        const newGs       = { ...g, teams: newTeams, winner: winnerTeam || null };
 
+        // Timer only reveals the pre-computed replacement — no task selection here.
         const key = `${teamId}-${r}-${c}`;
         clearTimeout(timers.current[key]);
         timers.current[key] = setTimeout(() => {
           setGs(prev => {
             if (!prev) return prev;
-            const resolved = prev.teams.map(t => {
-              if (t.id !== teamId) return t;
-              if (!t.board[r]?.[c]?.flipped) return t;
+            const teamIdx = prev.teams.findIndex(t => t.id === teamId);
+            if (teamIdx === -1) return prev;
+            const t    = prev.teams[teamIdx];
+            const tile = t.board[r]?.[c];
 
-              if (!prev.settings.replacement) {
-                const board = t.board.map((row, ri) =>
-                  row.map((tl, ci) => ri===r && ci===c ? { ...tl, flipped:false, completed:true } : tl)
-                );
-                const newCompletedPositions = [...(t.completedPositions || Array(25).fill(false))];
-                newCompletedPositions[r * 5 + c] = true;
-                return { ...t, board, completedPositions: newCompletedPositions };
-              }
+            // If this tile was undone (restored to flipped:false), skip silently.
+            if (!tile?.flipped) return prev;
 
-              const available = prev.settings.tasks.filter(task => !t.exhaustedTasks.includes(task));
-              if (available.length === 0) {
-                const board = t.board.map((row, ri) =>
-                  row.map((tl, ci) => ri===r && ci===c ? { ...tl, flipped:false, completed:true } : tl)
-                );
-                const newCompletedPositions = [...(t.completedPositions || Array(25).fill(false))];
-                newCompletedPositions[r * 5 + c] = true;
-                return { ...t, board, completedPositions: newCompletedPositions };
-              }
+            const resolvedPositions = [...(t.completedPositions || Array(25).fill(false))];
+            resolvedPositions[r * 5 + c] = true;
 
-              const newTask = available[randInt(0, available.length - 1)];
-              const newTile = makeTile(newTask, prev.settings.dMin, prev.settings.dMax, true);
-              const newExhausted = [...t.exhaustedTasks, newTask];
-              const board = t.board.map((row, ri) =>
-                row.map((tl, ci) => ri===r && ci===c ? newTile : tl)
-              );
-              const newCompletedPositions = [...(t.completedPositions || Array(25).fill(false))];
-              newCompletedPositions[r * 5 + c] = true;
-              return { ...t, board, exhaustedTasks: newExhausted, completedPositions: newCompletedPositions };
-            });
-            return { ...prev, teams: resolved };
+            const board = t.board.map((row, ri) =>
+              row.map((tl, ci) => {
+                if (ri !== r || ci !== c) return tl;
+                // Reveal the pre-computed replacement, or settle as completed if none.
+                return tl.pendingReplacement
+                  ? { ...tl.pendingReplacement, pendingReplacement: null }
+                  : { ...tl, flipped: false, completed: true, pendingReplacement: null };
+              })
+            );
+
+            const newTeams = [...prev.teams];
+            newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions };
+            return { ...prev, teams: newTeams };
           });
         }, 1400);
 
+        // Clean up damage float after animation.
         setTimeout(() => {
           setGs(prev => {
             if (!prev) return prev;
             const teams = prev.teams.map(t =>
               t.id === teamId
-                ? { ...t, damageFloats:(t.damageFloats||[]).filter(f => f.id!==floatId) }
+                ? { ...t, damageFloats: (t.damageFloats || []).filter(f => f.id !== floatId) }
                 : t
             );
             return { ...prev, teams };
@@ -445,24 +441,24 @@ export default function App() {
       winner: gs.winner?.name ?? null,
       teams: gs.teams.map(t => ({
         name: t.name,
-        bosses: t.bosses.map(b => ({ name:b.name, defeated:b.defeated, remainingHp:b.currentHp, maxHp:b.maxHp })),
-        totalDamage: t.log.reduce((s,e)=>s+e.damage,0),
+        bosses: t.bosses.map(b => ({ name: b.name, defeated: b.defeated, remainingHp: b.currentHp, maxHp: b.maxHp })),
+        totalDamage: t.log.reduce((s, e) => s + e.damage, 0),
         tilesUsed: t.log.length,
         log: t.log,
       })),
-      settings: { ...gs.settings, tasks: gs.settings.tasks.length+" tasks" },
+      settings: { ...gs.settings, tasks: gs.settings.tasks.length + " tasks" },
     };
-    const blob = new Blob([JSON.stringify(data,null,2)], { type:"application/json" });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const a = Object.assign(document.createElement("a"),
-      { href:URL.createObjectURL(blob), download:`osrs-bingo-${Date.now()}.json` });
+      { href: URL.createObjectURL(blob), download: `osrs-bingo-${Date.now()}.json` });
     a.click();
     URL.revokeObjectURL(a.href);
   }, [gs]);
 
   return (
-    <div style={{ minHeight:"100vh", background:"#060300" }}>
-      {phase==="setup" && <AdminPanel onStart={handleStart} />}
-      {phase==="game"  && gs && (
+    <div style={{ minHeight: "100vh", background: "#060300" }}>
+      {phase === "setup" && <AdminPanel onStart={handleStart} />}
+      {phase === "game"  && gs && (
         <GameView gs={gs} dispatch={dispatch} onReset={handleReset} onExport={handleExport} />
       )}
     </div>
