@@ -219,10 +219,6 @@ export default function App() {
 
     if (action.type === "UNDO") {
       const { teamId } = action;
-      // Do NOT clear other tiles' timers here. Each timer guards itself:
-      //   if (!tile.flipped) return prev  — so undone tiles are skipped harmlessly.
-      // Clearing all team timers would kill pending timers for other already-flipped
-      // tiles, leaving them permanently stuck in the flipped/damage state.
       setGs(g => {
         if (!g) return g;
         const team = g.teams.find(t => t.id === teamId);
@@ -243,13 +239,26 @@ export default function App() {
           type: 'restore',
         };
 
+        const restoredBoard = snapshot.board;
+        const resolvedPositions = [...(snapshot.completedPositions || Array(25).fill(false))];
+        const revealedBoard = restoredBoard.map((row, ri) =>
+          row.map((tl, ci) => {
+            if (!tl.flipped) return tl;
+            resolvedPositions[ri * 5 + ci] = true;
+            if (tl.pendingReplacement) {
+              return { ...tl.pendingReplacement, pendingReplacement: null };
+            }
+            return { ...tl, flipped: false, completed: true, pendingReplacement: null };
+          })
+        );
+
         const updatedTeam = {
           ...team,
           bosses:                 snapshot.bosses,
           activeBossIndex:        snapshot.activeBossIndex,
-          board:                  snapshot.board,
+          board:                  revealedBoard,
           exhaustedTasks:         snapshot.exhaustedTasks,
-          completedPositions:     snapshot.completedPositions,
+          completedPositions:     resolvedPositions,
           lineCompletedPositions: snapshot.lineCompletedPositions,
           log:                    [...team.log, restoreLogEntry],
           damageFloats:           [],
