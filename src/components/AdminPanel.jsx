@@ -14,6 +14,7 @@ export function AdminPanel({ onStart }) {
   const [randomizeDamage, setRandomizeDamage] = useState(true);
   const [fixedDamage, setFixedDamage] = useState(100);
   const [fixedDamageRaw, setFixedDamageRaw] = useState("100");
+  const [randomizeBoard, setRandomizeBoard] = useState(true);
   const [rowBonusDamage, setRowBonusDamage] = useState(50);
   const [enableRowBonus, setEnableRowBonus] = useState(true);
   const dRangeValid = dMin > 0 && dMax > 0 && dMin < dMax;
@@ -77,11 +78,12 @@ export function AdminPanel({ onStart }) {
   const canStart = selBosses.length > 0 && tasks.length >= 25 && (dRangeValid || !randomizeDamage) && (randomizeDamage || fixedDamageValid);
 
   const handleStart = () => {
+    alert(`canStart=${canStart}, selBosses=${selBosses.length}, tasks=${tasks.length}`);
     if (!canStart) return;
     onStart({
       selectedBosses: BOSSES_DATA.filter(b => selBosses.includes(b.id)),
       teamNames: teamNames.slice(0, teamCount).map((n, i) => n.trim() || `Team ${i + 1}`),
-      settings: { dMin, dMax, randomizeDamage, fixedDamage, replacement, sequential, rowBonusDamage, enableRowBonus, tasks },
+      settings: { dMin, dMax, randomizeDamage, fixedDamage, randomizeBoard, replacement, sequential, rowBonusDamage, enableRowBonus, tasks },
     });
   };
 
@@ -316,6 +318,12 @@ export function AdminPanel({ onStart }) {
             </div>
 
             {[
+              {
+                val: randomizeBoard,
+                set: setRandomizeBoard,
+                label: "Randomize Boards",
+                desc: "Each team gets a different board layout. Disable for identical boards.",
+              },
               {
                 val: replacement,
                 set: setReplacement,

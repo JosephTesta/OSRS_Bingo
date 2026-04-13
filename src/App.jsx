@@ -23,8 +23,8 @@ const makeTile = (task, dMin, dMax, isNew = false, randomizeDamage = true, fixed
   pendingReplacement: null,
 });
 
-const makeBoard = (pool, dMin, dMax, randomizeDamage = true, fixedDamage = 100) => {
-  const picked = shuffle(pool).slice(0, 25);
+const makeBoard = (pool, dMin, dMax, randomizeDamage = true, fixedDamage = 100, shouldShuffle = true) => {
+  const picked = shouldShuffle ? shuffle(pool).slice(0, 25) : pool.slice(0, 25);
   const board  = Array.from({ length: 5 }, (_, r) =>
     Array.from({ length: 5 }, (_, c) => ({
       id: uid(), task: picked[r * 5 + c],
@@ -40,7 +40,7 @@ const makeBosses = (selectedBosses) =>
 
 // Snapshot the team state exactly as-is — pendingReplacement is intentionally
 // included so that undo restores tiles mid-animation with their future task intact.
-const snapshotTeam = (t) => ({
+const snapshotTeam = (t, g) => ({
   bosses:          t.bosses.map(b => ({ ...b })),
   activeBossIndex: t.activeBossIndex,
   board:           t.board.map(row => row.map(tile => ({ ...tile }))),
@@ -169,28 +169,46 @@ export default function App() {
   }, [phase, gs]);
 
   const handleStart = useCallback(({ selectedBosses, teamNames, settings }) => {
-    setGs({
-      teams: teamNames.map(name => {
-        const { board, exhaustedTasks } = makeBoard(settings.tasks, settings.dMin, settings.dMax, settings.randomizeDamage, settings.fixedDamage);
-        return {
-          id: uid(),
-          name,
-          board,
-          exhaustedTasks,
-          bosses: makeBosses(selectedBosses),
-          activeBossIndex: 0,
-          damageFloats: [],
-          log: [],
-          history: [],
-          completedPositions: Array(25).fill(false),
-          lineCompletedPositions: Array(25).fill(false),
-        };
-      }),
-      settings,
-      winner: null,
-      undoFlashTeamId: null,
-    });
-    setPhase("game");
+    try {
+      const tasks = settings.tasks;
+      const dMin = settings.dMin;
+      const dMax = settings.dMax;
+      const randomizeDamage = settings.randomizeDamage;
+      const fixedDamage = settings.fixedDamage;
+      const randomizeBoard = settings.randomizeBoard;
+      
+      alert("in handleStart try block");
+      const sharedBoard = makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, false);
+      alert("makeBoard done");
+      setGs({
+        teams: teamNames.map(name => {
+          const { board, exhaustedTasks } = randomizeBoard 
+            ? makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, true)
+            : { board: JSON.parse(JSON.stringify(sharedBoard.board)), exhaustedTasks: [...sharedBoard.exhaustedTasks] };
+          return {
+            id: uid(),
+            name,
+            board,
+            exhaustedTasks,
+            bosses: makeBosses(selectedBosses),
+            activeBossIndex: 0,
+            damageFloats: [],
+            log: [],
+            history: [],
+            completedPositions: Array(25).fill(false),
+            lineCompletedPositions: Array(25).fill(false),
+          };
+        }),
+        settings,
+        winner: null,
+        undoFlashTeamId: null,
+      });
+      alert("setGs done, about to setPhase");
+      setPhase("game");
+      alert("setPhase called");
+    } catch (e) {
+      alert("error in handleStart: " + e.message);
+    }
   }, []);
 
   const dispatch = useCallback(action => {
@@ -326,11 +344,18 @@ export default function App() {
         let pendingReplacement = null;
         let newExhaustedTasks  = team.exhaustedTasks;
         if (g.settings.replacement) {
-          const available = g.settings.tasks.filter(task => !team.exhaustedTasks.includes(task));
+          const taskPool = team.exhaustedTasks;
+          const available = g.settings.tasks.filter(task => !taskPool.includes(task));
           if (available.length > 0) {
-            const newTask = available[randInt(0, available.length - 1)];
+            let newTask;
+            if (g.settings.randomizeBoard) {
+              newTask = available[randInt(0, available.length - 1)];
+              newExhaustedTasks = [...team.exhaustedTasks, newTask];
+            } else {
+              newTask = available[0];
+              newExhaustedTasks = [...team.exhaustedTasks, newTask];
+            }
             pendingReplacement = makeTile(newTask, g.settings.dMin, g.settings.dMax, true, g.settings.randomizeDamage, g.settings.fixedDamage);
-            newExhaustedTasks  = [...team.exhaustedTasks, newTask];
           }
         }
 
@@ -368,7 +393,7 @@ export default function App() {
           lineCompletedPositions: newLineCompletedPositions,
           log:                    [...team.log, logEntry],
           damageFloats:           [...(team.damageFloats || []), newFloat],
-          history:                [...team.history, snapshotTeam(team)],
+          history:                [...team.history, snapshotTeam(team, g)],
         };
 
         const newTeams    = g.teams.map(t => t.id === teamId ? updatedTeam : t);
