@@ -169,46 +169,38 @@ export default function App() {
   }, [phase, gs]);
 
   const handleStart = useCallback(({ selectedBosses, teamNames, settings }) => {
-    try {
-      const tasks = settings.tasks;
-      const dMin = settings.dMin;
-      const dMax = settings.dMax;
-      const randomizeDamage = settings.randomizeDamage;
-      const fixedDamage = settings.fixedDamage;
-      const randomizeBoard = settings.randomizeBoard;
-      
-      alert("in handleStart try block");
-      const sharedBoard = makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, false);
-      alert("makeBoard done");
-      setGs({
-        teams: teamNames.map(name => {
-          const { board, exhaustedTasks } = randomizeBoard 
-            ? makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, true)
-            : { board: JSON.parse(JSON.stringify(sharedBoard.board)), exhaustedTasks: [...sharedBoard.exhaustedTasks] };
-          return {
-            id: uid(),
-            name,
-            board,
-            exhaustedTasks,
-            bosses: makeBosses(selectedBosses),
-            activeBossIndex: 0,
-            damageFloats: [],
-            log: [],
-            history: [],
-            completedPositions: Array(25).fill(false),
-            lineCompletedPositions: Array(25).fill(false),
-          };
-        }),
-        settings,
-        winner: null,
-        undoFlashTeamId: null,
-      });
-      alert("setGs done, about to setPhase");
-      setPhase("game");
-      alert("setPhase called");
-    } catch (e) {
-      alert("error in handleStart: " + e.message);
-    }
+    const tasks = settings.tasks;
+    const dMin = settings.dMin;
+    const dMax = settings.dMax;
+    const randomizeDamage = settings.randomizeDamage;
+    const fixedDamage = settings.fixedDamage;
+    const randomizeBoard = settings.randomizeBoard;
+    
+    const sharedBoard = makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, false);
+    setGs({
+      teams: teamNames.map(name => {
+        const { board, exhaustedTasks } = randomizeBoard 
+          ? makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, true)
+          : { board: JSON.parse(JSON.stringify(sharedBoard.board)), exhaustedTasks: [...sharedBoard.exhaustedTasks] };
+        return {
+          id: uid(),
+          name,
+          board,
+          exhaustedTasks,
+          bosses: makeBosses(selectedBosses),
+          activeBossIndex: 0,
+          damageFloats: [],
+          log: [],
+          history: [],
+          completedPositions: Array(25).fill(false),
+          lineCompletedPositions: Array(25).fill(false),
+        };
+      }),
+      settings,
+      winner: null,
+      undoFlashTeamId: null,
+    });
+    setPhase("game");
   }, []);
 
   const dispatch = useCallback(action => {

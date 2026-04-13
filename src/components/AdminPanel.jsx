@@ -78,7 +78,6 @@ export function AdminPanel({ onStart }) {
   const canStart = selBosses.length > 0 && tasks.length >= 25 && (dRangeValid || !randomizeDamage) && (randomizeDamage || fixedDamageValid);
 
   const handleStart = () => {
-    alert(`canStart=${canStart}, selBosses=${selBosses.length}, tasks=${tasks.length}`);
     if (!canStart) return;
     onStart({
       selectedBosses: BOSSES_DATA.filter(b => selBosses.includes(b.id)),
