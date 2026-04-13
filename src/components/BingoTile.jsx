@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition, isLineCompleted }) {
+export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition, isLineCompleted, isReplaced }) {
   const [animCls, setAnimCls] = useState("");
   const prevId = useRef(tile.id);
 
@@ -18,9 +18,8 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
   const showBack = isDone;
   const clickable = !noClick && !isDone;
 
-  const showCompletedOutline = isDone && (isCompletedPosition || isLineCompleted);
-
-  const showOutline = isCompletedPosition || isLineCompleted;
+  const isPositionResolved = isCompletedPosition || isLineCompleted;
+  const showOutline = isPositionResolved || isReplaced;
 
   return (
     <div

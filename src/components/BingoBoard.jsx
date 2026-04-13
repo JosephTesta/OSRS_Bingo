@@ -1,6 +1,6 @@
 import { BingoTile } from "./BingoTile";
 
-export function BingoBoard({ board, onTileComplete, disabled, completedPositions, lineCompletedPositions }) {
+export function BingoBoard({ board, onTileComplete, disabled, completedPositions, lineCompletedPositions, replacedPositions }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 3, padding: "5px 7px" }}>
       {board.map((row, r) =>
@@ -14,6 +14,7 @@ export function BingoBoard({ board, onTileComplete, disabled, completedPositions
             noClick={disabled || tile.flipped || tile.completed}
             isCompletedPosition={completedPositions && completedPositions[r * 5 + c]}
             isLineCompleted={lineCompletedPositions && lineCompletedPositions[r * 5 + c]}
+            isReplaced={replacedPositions && replacedPositions[r * 5 + c]}
           />
         ))
       )}

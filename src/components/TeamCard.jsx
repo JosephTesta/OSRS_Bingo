@@ -55,6 +55,7 @@ export function TeamCard({ team, onTileComplete, onSetActiveBoss, onUndo, disabl
         disabled={disabled || allDone}
         completedPositions={team.completedPositions}
         lineCompletedPositions={team.lineCompletedPositions}
+        replacedPositions={team.replacedPositions}
       />
 
       {/* Log */}

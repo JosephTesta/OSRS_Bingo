@@ -47,6 +47,7 @@ const snapshotTeam = (t, g) => ({
   exhaustedTasks:  [...t.exhaustedTasks],
   completedPositions:     [...(t.completedPositions || Array(25).fill(false))],
   lineCompletedPositions: [...(t.lineCompletedPositions || Array(25).fill(false))],
+  replacedPositions:      [...(t.replacedPositions || Array(25).fill(false))],
 });
 
 const CSS = `
@@ -194,6 +195,7 @@ export default function App() {
           history: [],
           completedPositions: Array(25).fill(false),
           lineCompletedPositions: Array(25).fill(false),
+          replacedPositions: Array(25).fill(false),
         };
       }),
       settings,
@@ -241,13 +243,17 @@ export default function App() {
 
         const restoredBoard = snapshot.board;
         const resolvedPositions = [...(snapshot.completedPositions || Array(25).fill(false))];
+        const resolvedReplaced = [...(snapshot.replacedPositions || Array(25).fill(false))];
         const revealedBoard = restoredBoard.map((row, ri) =>
           row.map((tl, ci) => {
             if (!tl.flipped) return tl;
-            resolvedPositions[ri * 5 + ci] = true;
             if (tl.pendingReplacement) {
+              resolvedPositions[ri * 5 + ci] = false;
+              resolvedReplaced[ri * 5 + ci] = true;
               return { ...tl.pendingReplacement, pendingReplacement: null };
             }
+            resolvedPositions[ri * 5 + ci] = true;
+            resolvedReplaced[ri * 5 + ci] = false;
             return { ...tl, flipped: false, completed: true, pendingReplacement: null };
           })
         );
@@ -259,6 +265,7 @@ export default function App() {
           board:                  revealedBoard,
           exhaustedTasks:         snapshot.exhaustedTasks,
           completedPositions:     resolvedPositions,
+          replacedPositions:      resolvedReplaced,
           lineCompletedPositions: snapshot.lineCompletedPositions,
           log:                    [...team.log, restoreLogEntry],
           damageFloats:           [],
@@ -281,8 +288,7 @@ export default function App() {
         const team = g.teams.find(t => t.id === teamId);
         if (!team) return g;
         const tile = team.board[r][c];
-        const isReplaced = team.completedPositions?.[r * 5 + c];
-        if (tile.flipped || tile.completed || isReplaced) return g;
+        if (tile.flipped || tile.completed) return g;
         const boss = team.bosses[team.activeBossIndex];
         if (!boss || boss.defeated) return g;
 
@@ -290,17 +296,18 @@ export default function App() {
         const floatId = uid();
 
         const testBoard = team.board.map((row, ri) =>
-          row.map((tl, ci) => ({ ...tl, flipped: tl.flipped || tl.completed || (team.completedPositions?.[ri * 5 + ci] ?? false) }))
+          row.map((tl, ci) => ({ ...tl, flipped: tl.flipped || tl.completed || (team.completedPositions?.[ri * 5 + ci] ?? false) || (team.replacedPositions?.[ri * 5 + ci] ?? false) }))
         );
         testBoard[r][c] = { ...testBoard[r][c], flipped: true };
 
         const existingLines     = team.lineCompletedPositions || Array(25).fill(false);
         const existingCompleted = team.completedPositions     || Array(25).fill(false);
+        const existingReplaced  = team.replacedPositions      || Array(25).fill(false);
 
-        const rowIsCompleteNow   = testBoard[r].every((t, ci) => t.flipped || existingCompleted[r * 5 + ci]);
-        const colIsCompleteNow   = testBoard.every((row, ri) => row[c].flipped || existingCompleted[ri * 5 + c]);
-        const diag1IsCompleteNow = r === c && testBoard.every((row, i) => row[i].flipped || existingCompleted[i * 5 + i]);
-        const diag2IsCompleteNow = (r + c === 4) && testBoard.every((row, i) => row[4-i].flipped || existingCompleted[i * 5 + (4-i)]);
+        const rowIsCompleteNow   = testBoard[r].every((t, ci) => t.flipped || existingCompleted[r * 5 + ci] || existingReplaced[r * 5 + ci]);
+        const colIsCompleteNow   = testBoard.every((row, ri) => row[c].flipped || existingCompleted[ri * 5 + c] || existingReplaced[ri * 5 + c]);
+        const diag1IsCompleteNow = r === c && testBoard.every((row, i) => row[i].flipped || existingCompleted[i * 5 + i] || existingReplaced[i * 5 + i]);
+        const diag2IsCompleteNow = (r + c === 4) && testBoard.every((row, i) => row[4-i].flipped || existingCompleted[i * 5 + (4-i)] || existingReplaced[i * 5 + (4-i)]);
 
         const rowWasComplete   = existingLines.slice(r * 5, r * 5 + 5).every(p => p);
         const colWasComplete   = [0,1,2,3,4].every(i => existingLines[i * 5 + c]);
@@ -374,6 +381,11 @@ export default function App() {
         const newCompletedPositions = [...(team.completedPositions || Array(25).fill(false))];
         newCompletedPositions[r * 5 + c] = true;
 
+        const newReplacedPositions = [...(team.replacedPositions || Array(25).fill(false))];
+        if (pendingReplacement) {
+          newReplacedPositions[r * 5 + c] = true;
+        }
+
         const newLineCompletedPositions = [...(team.lineCompletedPositions || Array(25).fill(false))];
         if (newCompletedLines > 0) {
           if (rowIsCompleteNow   && !rowWasComplete)   for (let ci = 0; ci < 5; ci++) newLineCompletedPositions[r * 5 + ci]       = true;
@@ -391,6 +403,7 @@ export default function App() {
           board:                  newBoard,
           exhaustedTasks:         newExhaustedTasks,
           completedPositions:     newCompletedPositions,
+          replacedPositions:      newReplacedPositions,
           lineCompletedPositions: newLineCompletedPositions,
           log:                    [...team.log, logEntry],
           damageFloats:           [...(team.damageFloats || []), newFloat],
@@ -416,20 +429,23 @@ export default function App() {
             if (!tile?.flipped) return prev;
 
             const resolvedPositions = [...(t.completedPositions || Array(25).fill(false))];
-            resolvedPositions[r * 5 + c] = true;
-
+            const resolvedReplaced = [...(t.replacedPositions || Array(25).fill(false))];
             const board = t.board.map((row, ri) =>
               row.map((tl, ci) => {
                 if (ri !== r || ci !== c) return tl;
-                // Reveal the pre-computed replacement, or settle as completed if none.
-                return tl.pendingReplacement
-                  ? { ...tl.pendingReplacement, pendingReplacement: null }
-                  : { ...tl, flipped: false, completed: true, pendingReplacement: null };
+                if (tl.pendingReplacement) {
+                  resolvedPositions[r * 5 + c] = false;
+                  resolvedReplaced[r * 5 + c] = true;
+                  return { ...tl.pendingReplacement, pendingReplacement: null };
+                }
+                resolvedPositions[r * 5 + c] = true;
+                resolvedReplaced[r * 5 + c] = false;
+                return { ...tl, flipped: false, completed: true, pendingReplacement: null };
               })
             );
 
             const newTeams = [...prev.teams];
-            newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions };
+            newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions, replacedPositions: resolvedReplaced };
             return { ...prev, teams: newTeams };
           });
         }, 1400);
