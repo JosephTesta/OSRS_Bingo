@@ -20,6 +20,7 @@ export function AdminPanel({ onStart }) {
   const dRangeValid = dMin > 0 && dMax > 0 && dMin < dMax;
   const [replacement, setReplacement] = useState(true);
   const [sequential, setSequential] = useState(true);
+  const [adminPassword, setAdminPassword] = useState("");
   const [taskDifficulties, setTaskDifficulties] = useState(new Set());
   const [taskCategories, setTaskCategories] = useState(new Set());
   const filteredTasks =
@@ -82,7 +83,7 @@ export function AdminPanel({ onStart }) {
     onStart({
       selectedBosses: BOSSES_DATA.filter(b => selBosses.includes(b.id)),
       teamNames: teamNames.slice(0, teamCount).map((n, i) => n.trim() || `Team ${i + 1}`),
-      settings: { dMin, dMax, randomizeDamage, fixedDamage, randomizeBoard, replacement, sequential, rowBonusDamage, enableRowBonus, tasks },
+      settings: { dMin, dMax, randomizeDamage, fixedDamage, randomizeBoard, replacement, sequential, rowBonusDamage, enableRowBonus, tasks, adminPassword },
     });
   };
 
@@ -337,15 +338,36 @@ export function AdminPanel({ onStart }) {
                 desc: "Award bonus damage when completing rows, columns, or diagonals",
                 hasInput: true,
               },
+              {
+                val: false,
+                set: () => {},
+                label: "Share Game",
+                desc: "Set a password to share this game with others (optional)",
+                hasPassword: true,
+              },
             ].map(item => (
               <div key={item.label}>
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                  <input type="checkbox" checked={item.val} onChange={e => item.set(e.target.checked)} style={{ marginTop: 3 }} />
+                {item.hasPassword ? (
                   <div>
                     <div style={{ fontSize: 14, color: "#c8a951" }}>{item.label}</div>
-                    <div style={{ fontSize: 12, color: "#5a4020" }}>{item.desc}</div>
+                    <div style={{ fontSize: 12, color: "#5a4020", marginBottom: 8 }}>{item.desc}</div>
+                    <input
+                      type="password"
+                      value={adminPassword}
+                      onChange={e => setAdminPassword(e.target.value)}
+                      placeholder="Set password to enable sharing"
+                      style={{ width: "100%" }}
+                    />
                   </div>
-                </label>
+                ) : (
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked={item.val} onChange={e => item.set(e.target.checked)} style={{ marginTop: 3 }} />
+                    <div>
+                      <div style={{ fontSize: 14, color: "#c8a951" }}>{item.label}</div>
+                      <div style={{ fontSize: 12, color: "#5a4020" }}>{item.desc}</div>
+                    </div>
+                  </label>
+                )}
                 {item.hasInput && enableRowBonus && (
                   <div style={{ marginLeft: 30, marginTop: 8, paddingLeft: 10, borderLeft: "2px solid rgba(200,168,75,0.2)" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
