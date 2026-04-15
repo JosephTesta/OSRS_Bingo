@@ -4,7 +4,7 @@ import { DEFAULT_TASKS } from "./data/tasks";
 import { BOSSES_DATA } from "./data/bosses";
 import { AdminPanel } from "./components/AdminPanel";
 import { GameView } from "./components/GameView";
-import { getGame, getTeams, verifyAdminPassword, createGame, createTeam, updateAllTeams } from "./lib/api";
+import { getGame, getTeams, verifyAdminPassword, createGame, createTeam, updateTeam, markTileComplete, saveTeamState } from "./lib/api";
 import { supabase } from "./lib/supabase";
 
 const uid     = () => Math.random().toString(36).slice(2, 9);
@@ -458,7 +458,7 @@ export default function App() {
         const newGs = { ...g, teams: newTeams, winner, undoFlashTeamId: teamId };
         
         if (gameId && isAdmin) {
-          updateAllTeams(gameId, newTeams.map(transformBack)).catch(console.error);
+          saveTeamState(teamId, transformBack(updatedTeam)).catch(console.error);
         }
         
         return newGs;
@@ -601,7 +601,7 @@ export default function App() {
         const newGs       = { ...g, teams: newTeams, winner: winnerTeam || null };
 
         if (gameId && isAdmin) {
-          updateAllTeams(gameId, newTeams.map(transformBack)).catch(console.error);
+          markTileComplete(teamId, r * 5 + c, transformBack(updatedTeam)).catch(console.error);
         }
 
         // Timer only reveals the pre-computed replacement — no task selection here.
@@ -638,7 +638,7 @@ export default function App() {
             newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions, replacedPositions: resolvedReplaced };
             
             if (gameId && isAdmin) {
-              updateAllTeams(gameId, newTeams.map(transformBack)).catch(console.error);
+              markTileComplete(teamId, r * 5 + c, transformBack(newTeams[teamIdx])).catch(console.error);
             }
             
             return { ...prev, teams: newTeams };

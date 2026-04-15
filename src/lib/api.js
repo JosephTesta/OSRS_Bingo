@@ -114,27 +114,58 @@ export async function updateTeam(teamId, updates) {
   if (error) throw error;
 }
 
-export async function updateAllTeams(gameId, teamsData) {
-  const teams = await getTeams(gameId);
-  
-  for (let i = 0; i < teams.length; i++) {
-    const dbData = {
-      board: JSON.stringify(teamsData[i].board),
-      exhausted_tasks: teamsData[i].exhausted_tasks,
-      completed_positions: teamsData[i].completed_positions,
-      line_completed_positions: teamsData[i].line_completed_positions,
-      replaced_positions: teamsData[i].replaced_positions,
-      bosses: JSON.stringify(teamsData[i].bosses),
-      active_boss_index: teamsData[i].active_boss_index,
-      log: JSON.stringify(teamsData[i].log),
-      history: JSON.stringify(teamsData[i].history),
-    };
-    
-    const { error } = await supabase
-      .from('teams')
-      .update(dbData)
-      .eq('id', teams[i].id);
-      
-    if (error) throw error;
+export async function saveTeamState(teamId, teamData) {
+  const dbUpdates = {
+    completed_positions: teamData.completed_positions,
+    line_completed_positions: teamData.line_completed_positions,
+    replaced_positions: teamData.replaced_positions,
+    exhausted_tasks: teamData.exhausted_tasks,
+    log: JSON.stringify(teamData.log),
+    history: JSON.stringify(teamData.history),
+  };
+
+  if (teamData.board) {
+    dbUpdates.board = JSON.stringify(teamData.board);
   }
+  if (teamData.bosses) {
+    dbUpdates.bosses = JSON.stringify(teamData.bosses);
+  }
+  if (teamData.active_boss_index !== undefined) {
+    dbUpdates.active_boss_index = teamData.active_boss_index;
+  }
+  
+  const { error } = await supabase
+    .from('teams')
+    .update(dbUpdates)
+    .eq('id', teamId);
+    
+  if (error) throw error;
+}
+
+export async function markTileComplete(teamId, tileIndex, tileData) {
+  const dbUpdates = {
+    completed_positions: tileData.completedPositions,
+    line_completed_positions: tileData.lineCompletedPositions,
+    replaced_positions: tileData.replacedPositions,
+    exhausted_tasks: tileData.exhaustedTasks,
+    log: JSON.stringify(tileData.log),
+    history: JSON.stringify(tileData.history),
+  };
+
+  if (tileData.board) {
+    dbUpdates.board = JSON.stringify(tileData.board);
+  }
+  if (tileData.bosses) {
+    dbUpdates.bosses = JSON.stringify(tileData.bosses);
+  }
+  if (tileData.activeBossIndex !== undefined) {
+    dbUpdates.active_boss_index = tileData.activeBossIndex;
+  }
+  
+  const { error } = await supabase
+    .from('teams')
+    .update(dbUpdates)
+    .eq('id', teamId);
+    
+  if (error) throw error;
 }
