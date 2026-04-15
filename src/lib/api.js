@@ -114,25 +114,45 @@ export async function updateTeam(teamId, updates) {
   if (error) throw error;
 }
 
-export async function saveTeamState(teamId, teamData) {
-  const dbUpdates = {
-    completed_positions: teamData.completed_positions,
-    line_completed_positions: teamData.line_completed_positions,
-    replaced_positions: teamData.replaced_positions,
-    exhausted_tasks: teamData.exhausted_tasks,
-    log: JSON.stringify(teamData.log),
-    history: JSON.stringify(teamData.history),
+export async function getTeam(teamId) {
+  const { data: team, error } = await supabase
+    .from('teams')
+    .select('*')
+    .eq('id', teamId)
+    .single();
+    
+  if (error) throw error;
+  return {
+    ...team,
+    board: typeof team.board === 'string' ? JSON.parse(team.board) : team.board,
+    bosses: typeof team.bosses === 'string' ? JSON.parse(team.bosses) : team.bosses,
+    log: typeof team.log === 'string' ? JSON.parse(team.log) : (team.log || []),
+    history: typeof team.history === 'string' ? JSON.parse(team.history) : (team.history || []),
   };
+}
 
-  if (teamData.board) {
-    dbUpdates.board = JSON.stringify(teamData.board);
-  }
-  if (teamData.bosses) {
-    dbUpdates.bosses = JSON.stringify(teamData.bosses);
-  }
-  if (teamData.active_boss_index !== undefined) {
-    dbUpdates.active_boss_index = teamData.active_boss_index;
-  }
+export async function saveTeamState(teamId, teamData) {
+  const latest = await getTeam(teamId);
+  
+  const mergedLog = [...(latest.log || []), ...(teamData.log || [])].slice(-100);
+  const mergedHistory = [...(latest.history || []), ...(teamData.history || [])].slice(-50);
+  const mergedExhausted = teamData.exhausted_tasks || latest.exhaustedTasks;
+  
+  const mergedCompleted = [...(teamData.completed_positions || latest.completedPositions || Array(25).fill(false))];
+  const mergedLineCompleted = [...(teamData.line_completed_positions || latest.lineCompletedPositions || Array(25).fill(false))];
+  const mergedReplaced = [...(teamData.replaced_positions || latest.replacedPositions || Array(25).fill(false))];
+
+  const dbUpdates = {
+    completed_positions: mergedCompleted,
+    line_completed_positions: mergedLineCompleted,
+    replaced_positions: mergedReplaced,
+    exhausted_tasks: mergedExhausted,
+    log: JSON.stringify(mergedLog),
+    history: JSON.stringify(mergedHistory),
+    board: JSON.stringify(teamData.board || latest.board),
+    bosses: JSON.stringify(teamData.bosses || latest.bosses),
+    active_boss_index: teamData.active_boss_index ?? latest.activeBossIndex,
+  };
   
   const { error } = await supabase
     .from('teams')
@@ -143,24 +163,40 @@ export async function saveTeamState(teamId, teamData) {
 }
 
 export async function markTileComplete(teamId, tileIndex, tileData) {
+  const latest = await getTeam(teamId);
+  
+  const currentCompleted = latest.completedPositions || Array(25).fill(false);
+  const currentReplaced = latest.replacedPositions || Array(25).fill(false);
+  const currentLineCompleted = latest.lineCompletedPositions || Array(25).fill(false);
+  
+  currentCompleted[tileIndex] = tileData.completedPositions?.[tileIndex] ?? true;
+  
+  if (tileData.replacedPositions) {
+    for (let i = 0; i < 25; i++) {
+      if (tileData.replacedPositions[i]) currentReplaced[i] = true;
+    }
+  }
+  
+  if (tileData.lineCompletedPositions) {
+    for (let i = 0; i < 25; i++) {
+      if (tileData.lineCompletedPositions[i]) currentLineCompleted[i] = true;
+    }
+  }
+  
+  const mergedLog = [...(latest.log || []), ...(tileData.log || [])].slice(-100);
+  const mergedHistory = [...(latest.history || []), ...(tileData.history || [])].slice(-50);
+  
   const dbUpdates = {
-    completed_positions: tileData.completedPositions,
-    line_completed_positions: tileData.lineCompletedPositions,
-    replaced_positions: tileData.replacedPositions,
-    exhausted_tasks: tileData.exhaustedTasks,
-    log: JSON.stringify(tileData.log),
-    history: JSON.stringify(tileData.history),
+    completed_positions: currentCompleted,
+    replaced_positions: currentReplaced,
+    line_completed_positions: currentLineCompleted,
+    exhausted_tasks: tileData.exhaustedTasks || latest.exhaustedTasks,
+    log: JSON.stringify(mergedLog),
+    history: JSON.stringify(mergedHistory),
+    board: JSON.stringify(tileData.board || latest.board),
+    bosses: JSON.stringify(tileData.bosses || latest.bosses),
+    active_boss_index: tileData.activeBossIndex ?? latest.activeBossIndex,
   };
-
-  if (tileData.board) {
-    dbUpdates.board = JSON.stringify(tileData.board);
-  }
-  if (tileData.bosses) {
-    dbUpdates.bosses = JSON.stringify(tileData.bosses);
-  }
-  if (tileData.activeBossIndex !== undefined) {
-    dbUpdates.active_boss_index = tileData.activeBossIndex;
-  }
   
   const { error } = await supabase
     .from('teams')

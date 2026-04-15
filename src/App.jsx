@@ -4,7 +4,7 @@ import { DEFAULT_TASKS } from "./data/tasks";
 import { BOSSES_DATA } from "./data/bosses";
 import { AdminPanel } from "./components/AdminPanel";
 import { GameView } from "./components/GameView";
-import { getGame, getTeams, verifyAdminPassword, createGame, createTeam, updateTeam, markTileComplete, saveTeamState } from "./lib/api";
+import { getGame, getTeams, getTeam, verifyAdminPassword, createGame, createTeam, updateTeam, markTileComplete, saveTeamState } from "./lib/api";
 import { supabase } from "./lib/supabase";
 
 const uid     = () => Math.random().toString(36).slice(2, 9);
