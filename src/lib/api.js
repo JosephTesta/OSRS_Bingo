@@ -133,23 +133,28 @@ export async function getTeam(teamId) {
 
 export async function saveTeamState(teamId, teamData) {
   console.log('saveTeamState called', teamId);
-  const { data, error } = await supabase.rpc('save_team_state', {
-    p_team_id: teamId,
-    p_board: JSON.stringify(teamData.board),
-    p_bosses: JSON.stringify(teamData.bosses),
-    p_active_boss_index: teamData.active_boss_index,
-    p_log: JSON.stringify(teamData.log),
-    p_history: JSON.stringify(teamData.history),
-    p_completed_positions: teamData.completed_positions,
-    p_exhausted_tasks: teamData.exhausted_tasks,
-  });
+  try {
+    const { data, error } = await supabase.rpc('save_team_state', {
+      p_team_id: teamId,
+      p_board: JSON.stringify(teamData.board),
+      p_bosses: JSON.stringify(teamData.bosses),
+      p_active_boss_index: teamData.active_boss_index,
+      p_log: JSON.stringify(teamData.log),
+      p_history: JSON.stringify(teamData.history),
+      p_completed_positions: teamData.completed_positions,
+      p_exhausted_tasks: teamData.exhausted_tasks,
+    });
     
-  if (error) {
-    console.error('saveTeamState error:', error);
-    // Fallback to regular update
-    return saveTeamStateFallback(teamId, teamData);
+    if (error) {
+      console.error('saveTeamState RPC error:', error);
+      await saveTeamStateFallback(teamId, teamData);
+    } else {
+      console.log('saveTeamState result:', data);
+    }
+  } catch (e) {
+    console.error('saveTeamState exception:', e);
+    await saveTeamStateFallback(teamId, teamData);
   }
-  console.log('saveTeamState result:', data);
 }
 
 async function saveTeamStateFallback(teamId, teamData) {
@@ -185,24 +190,29 @@ async function saveTeamStateFallback(teamId, teamData) {
 
 export async function markTileComplete(teamId, tileIndex, tileData) {
   console.log('markTileComplete called', teamId, tileIndex);
-  const { data, error } = await supabase.rpc('complete_tile', {
-    p_team_id: teamId,
-    p_tile_index: tileIndex,
-    p_board: JSON.stringify(tileData.board),
-    p_bosses: JSON.stringify(tileData.bosses),
-    p_active_boss_index: tileData.activeBossIndex,
-    p_log: JSON.stringify(tileData.log),
-    p_history: JSON.stringify(tileData.history),
-    p_completed_positions: tileData.completedPositions,
-    p_exhausted_tasks: tileData.exhaustedTasks,
-  });
+  try {
+    const { data, error } = await supabase.rpc('complete_tile', {
+      p_team_id: teamId,
+      p_tile_index: tileIndex,
+      p_board: JSON.stringify(tileData.board),
+      p_bosses: JSON.stringify(tileData.bosses),
+      p_active_boss_index: tileData.activeBossIndex,
+      p_log: JSON.stringify(tileData.log),
+      p_history: JSON.stringify(tileData.history),
+      p_completed_positions: tileData.completedPositions,
+      p_exhausted_tasks: tileData.exhaustedTasks,
+    });
     
-  if (error) {
-    console.error('markTileComplete error:', error);
-    // Fallback to regular update
-    return markTileCompleteFallback(teamId, tileIndex, tileData);
+    if (error) {
+      console.error('markTileComplete RPC error:', error);
+      await markTileCompleteFallback(teamId, tileIndex, tileData);
+    } else {
+      console.log('markTileComplete result:', data);
+    }
+  } catch (e) {
+    console.error('markTileComplete exception:', e);
+    await markTileCompleteFallback(teamId, tileIndex, tileData);
   }
-  console.log('markTileComplete result:', data);
 }
 
 async function markTileCompleteFallback(teamId, tileIndex, tileData) {
