@@ -135,13 +135,13 @@ export async function saveTeamState(teamId, teamData) {
   console.log('saveTeamState called', teamId, teamData);
   const { data, error } = await supabase.rpc('save_team_state', {
     p_team_id: teamId,
+    p_active_boss_index: teamData.active_boss_index,
     p_board: JSON.stringify(teamData.board),
     p_bosses: JSON.stringify(teamData.bosses),
-    p_active_boss_index: teamData.active_boss_index,
-    p_log: JSON.stringify(teamData.log),
-    p_history: JSON.stringify(teamData.history),
     p_completed_positions: teamData.completed_positions,
     p_exhausted_tasks: teamData.exhausted_tasks,
+    p_log: JSON.stringify(teamData.log),
+    p_history: JSON.stringify(teamData.history),
   });
     
   if (error) {
@@ -156,13 +156,13 @@ export async function markTileComplete(teamId, tileIndex, tileData) {
   const { data, error } = await supabase.rpc('complete_tile', {
     p_team_id: teamId,
     p_tile_index: tileIndex,
+    p_active_boss_index: tileData.activeBossIndex,
     p_board: JSON.stringify(tileData.board),
     p_bosses: JSON.stringify(tileData.bosses),
-    p_active_boss_index: tileData.activeBossIndex,
-    p_log: JSON.stringify(tileData.log),
-    p_history: JSON.stringify(tileData.history),
     p_completed_positions: tileData.completedPositions,
     p_exhausted_tasks: tileData.exhaustedTasks,
+    p_log: JSON.stringify(tileData.log),
+    p_history: JSON.stringify(tileData.history),
   });
     
   if (error) {
