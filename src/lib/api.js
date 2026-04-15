@@ -132,42 +132,119 @@ export async function getTeam(teamId) {
 }
 
 export async function saveTeamState(teamId, teamData) {
-  console.log('saveTeamState called', teamId, teamData);
+  console.log('saveTeamState called', teamId);
   const { data, error } = await supabase.rpc('save_team_state', {
-    p_active_boss_index: teamData.active_boss_index,
+    p_team_id: teamId,
     p_board: JSON.stringify(teamData.board),
     p_bosses: JSON.stringify(teamData.bosses),
+    p_active_boss_index: teamData.active_boss_index,
+    p_log: JSON.stringify(teamData.log),
+    p_history: JSON.stringify(teamData.history),
     p_completed_positions: teamData.completed_positions,
     p_exhausted_tasks: teamData.exhausted_tasks,
-    p_history: JSON.stringify(teamData.history),
-    p_log: JSON.stringify(teamData.log),
-    p_team_id: teamId,
   });
     
   if (error) {
     console.error('saveTeamState error:', error);
-    throw error;
+    // Fallback to regular update
+    return saveTeamStateFallback(teamId, teamData);
   }
   console.log('saveTeamState result:', data);
+}
+
+async function saveTeamStateFallback(teamId, teamData) {
+  const latest = await getTeam(teamId);
+  
+  const mergedLog = [...(latest.log || []), ...(teamData.log || [])].slice(-100);
+  const mergedHistory = [...(latest.history || []), ...(teamData.history || [])].slice(-50);
+  const mergedExhausted = teamData.exhausted_tasks || latest.exhaustedTasks;
+  
+  const mergedCompleted = [...(teamData.completed_positions || latest.completedPositions || Array(25).fill(false))];
+  const mergedLineCompleted = [...(teamData.line_completed_positions || latest.lineCompletedPositions || Array(25).fill(false))];
+  const mergedReplaced = [...(teamData.replaced_positions || latest.replacedPositions || Array(25).fill(false))];
+
+  const dbUpdates = {
+    completed_positions: mergedCompleted,
+    line_completed_positions: mergedLineCompleted,
+    replaced_positions: mergedReplaced,
+    exhausted_tasks: mergedExhausted,
+    log: JSON.stringify(mergedLog),
+    history: JSON.stringify(mergedHistory),
+    board: JSON.stringify(teamData.board || latest.board),
+    bosses: JSON.stringify(teamData.bosses || latest.bosses),
+    active_boss_index: teamData.active_boss_index ?? latest.activeBossIndex,
+  };
+  
+  const { error } = await supabase
+    .from('teams')
+    .update(dbUpdates)
+    .eq('id', teamId);
+    
+  if (error) throw error;
 }
 
 export async function markTileComplete(teamId, tileIndex, tileData) {
   console.log('markTileComplete called', teamId, tileIndex);
   const { data, error } = await supabase.rpc('complete_tile', {
-    p_active_boss_index: tileData.activeBossIndex,
-    p_board: JSON.stringify(tileData.board),
-    p_bosses: JSON.stringify(tileData.bosses),
-    p_completed_positions: tileData.completedPositions,
-    p_exhausted_tasks: tileData.exhaustedTasks,
-    p_history: JSON.stringify(tileData.history),
-    p_log: JSON.stringify(tileData.log),
     p_team_id: teamId,
     p_tile_index: tileIndex,
+    p_board: JSON.stringify(tileData.board),
+    p_bosses: JSON.stringify(tileData.bosses),
+    p_active_boss_index: tileData.activeBossIndex,
+    p_log: JSON.stringify(tileData.log),
+    p_history: JSON.stringify(tileData.history),
+    p_completed_positions: tileData.completedPositions,
+    p_exhausted_tasks: tileData.exhaustedTasks,
   });
     
   if (error) {
     console.error('markTileComplete error:', error);
-    throw error;
+    // Fallback to regular update
+    return markTileCompleteFallback(teamId, tileIndex, tileData);
   }
   console.log('markTileComplete result:', data);
+}
+
+async function markTileCompleteFallback(teamId, tileIndex, tileData) {
+  const latest = await getTeam(teamId);
+  
+  const currentCompleted = latest.completedPositions || Array(25).fill(false);
+  const currentReplaced = latest.replacedPositions || Array(25).fill(false);
+  const currentLineCompleted = latest.lineCompletedPositions || Array(25).fill(false);
+  
+  currentCompleted[tileIndex] = tileData.completedPositions?.[tileIndex] ?? true;
+  
+  if (tileData.replacedPositions) {
+    for (let i = 0; i < 25; i++) {
+      if (tileData.replacedPositions[i]) currentReplaced[i] = true;
+    }
+  }
+  
+  if (tileData.lineCompletedPositions) {
+    for (let i = 0; i < 25; i++) {
+      if (tileData.lineCompletedPositions[i]) currentLineCompleted[i] = true;
+    }
+  }
+  
+  const mergedLog = [...(latest.log || []), ...(tileData.log || [])].slice(-100);
+  const mergedHistory = [...(latest.history || []), ...(tileData.history || [])].slice(-50);
+  
+  const dbUpdates = {
+    completed_positions: currentCompleted,
+    replaced_positions: currentReplaced,
+    line_completed_positions: currentLineCompleted,
+    exhausted_tasks: tileData.exhaustedTasks || latest.exhaustedTasks,
+    log: JSON.stringify(mergedLog),
+    history: JSON.stringify(mergedHistory),
+    board: JSON.stringify(tileData.board || latest.board),
+    bosses: JSON.stringify(tileData.bosses || latest.bosses),
+    active_boss_index: tileData.activeBossIndex ?? latest.activeBossIndex,
+  };
+  
+  const { error } = await supabase
+    .from('teams')
+    .update(dbUpdates)
+    .eq('id', teamId);
+    
+  if (error) throw error;
 }
