@@ -132,7 +132,8 @@ export async function getTeam(teamId) {
 }
 
 export async function saveTeamState(teamId, teamData) {
-  const { error } = await supabase.rpc('save_team_state', {
+  console.log('saveTeamState called', teamId, teamData);
+  const { data, error } = await supabase.rpc('save_team_state', {
     p_team_id: teamId,
     p_board: JSON.stringify(teamData.board),
     p_bosses: JSON.stringify(teamData.bosses),
@@ -143,11 +144,16 @@ export async function saveTeamState(teamId, teamData) {
     p_exhausted_tasks: teamData.exhausted_tasks,
   });
     
-  if (error) throw error;
+  if (error) {
+    console.error('saveTeamState error:', error);
+    throw error;
+  }
+  console.log('saveTeamState result:', data);
 }
 
 export async function markTileComplete(teamId, tileIndex, tileData) {
-  const { error } = await supabase.rpc('complete_tile', {
+  console.log('markTileComplete called', teamId, tileIndex);
+  const { data, error } = await supabase.rpc('complete_tile', {
     p_team_id: teamId,
     p_tile_index: tileIndex,
     p_board: JSON.stringify(tileData.board),
@@ -159,5 +165,9 @@ export async function markTileComplete(teamId, tileIndex, tileData) {
     p_exhausted_tasks: tileData.exhaustedTasks,
   });
     
-  if (error) throw error;
+  if (error) {
+    console.error('markTileComplete error:', error);
+    throw error;
+  }
+  console.log('markTileComplete result:', data);
 }
