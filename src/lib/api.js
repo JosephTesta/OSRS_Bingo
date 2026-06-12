@@ -233,8 +233,8 @@ export async function applyTileAction(gameId, teamId, action) {
   }
 
   const rpcPayload = {
-    p_game_id: gameId,
     p_team_id: teamId,
+    p_game_id: gameId,
     p_client_action_id: action.clientActionId,
     p_tile_index: action.tileIndex,
     p_row: action.row,
