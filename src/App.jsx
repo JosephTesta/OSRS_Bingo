@@ -239,8 +239,16 @@ export default function App() {
   }
 
   function normalizeBoard(value) {
-    if (!Array.isArray(value) || value.length !== 5) return Array.from({ length: 5 }, () => Array(5).fill(null));
-    return value.map(row => Array.isArray(row) && row.length === 5 ? row : Array(5).fill(null));
+    if (!Array.isArray(value)) return Array.from({ length: 5 }, () => Array(5).fill(null));
+    if (value.length === 5 && value.every(row => Array.isArray(row) && row.length === 5)) {
+      return value.map(row => row.map(tile => tile ?? null));
+    }
+    if (value.length === 25) {
+      return Array.from({ length: 5 }, (_, r) =>
+        Array.from({ length: 5 }, (_, c) => value[r * 5 + c] ?? null)
+      );
+    }
+    return Array.from({ length: 5 }, () => Array(5).fill(null));
   }
 
   function transformTeam(team) {

@@ -104,14 +104,24 @@ BEGIN
     RETURN jsonb_build_object('applied', false, 'reason', 'team_not_found');
   END IF;
 
-  v_row := p_tile_index / 5;
-  v_col := p_tile_index % 5;
+  IF p_row IS NOT NULL AND p_col IS NOT NULL THEN
+    v_row := p_row;
+    v_col := p_col;
+  ELSE
+    v_row := p_tile_index / 5;
+    v_col := p_tile_index % 5;
+  END IF;
 
   IF v_row < 0 OR v_row > 4 OR v_col < 0 OR v_col > 4 THEN
     RETURN jsonb_build_object('applied', false, 'reason', 'invalid_tile_index');
   END IF;
 
   v_tile := v_team.board #> ARRAY[v_row::text, v_col::text];
+
+  IF v_tile IS NULL THEN
+    -- Fallback for legacy flat board layouts stored as a 25-item array.
+    v_tile := v_team.board #> ARRAY[p_tile_index::text];
+  END IF;
 
   IF v_tile IS NULL THEN
     RETURN jsonb_build_object('applied', false, 'reason', 'tile_not_found');
@@ -142,12 +152,20 @@ BEGIN
   v_has_replacement := p_pending_replacement IS NOT NULL AND (p_pending_replacement ? 'id');
 
   IF v_has_replacement THEN
-    v_board := jsonb_set(v_board, ARRAY[v_row::text, v_col::text], p_pending_replacement, true);
+    IF jsonb_typeof(v_board->0) = 'array' THEN
+      v_board := jsonb_set(v_board, ARRAY[v_row::text, v_col::text], p_pending_replacement, true);
+    ELSE
+      v_board := jsonb_set(v_board, ARRAY[p_tile_index::text], p_pending_replacement, true);
+    END IF;
   ELSE
     v_tile := jsonb_set(v_tile, '{flipped}'::text[], 'false'::jsonb, true);
     v_tile := jsonb_set(v_tile, '{completed}'::text[], 'true'::jsonb, true);
     v_tile := jsonb_set(v_tile, '{pendingReplacement}'::text[], 'null'::jsonb, true);
-    v_board := jsonb_set(v_board, ARRAY[v_row::text, v_col::text], v_tile, true);
+    IF jsonb_typeof(v_board->0) = 'array' THEN
+      v_board := jsonb_set(v_board, ARRAY[v_row::text, v_col::text], v_tile, true);
+    ELSE
+      v_board := jsonb_set(v_board, ARRAY[p_tile_index::text], v_tile, true);
+    END IF;
   END IF;
 
   v_completed := COALESCE(v_team.completed_positions, ARRAY[false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]::boolean[]);
