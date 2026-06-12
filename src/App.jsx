@@ -148,7 +148,9 @@ export default function App() {
   const localActionIds = useRef(new Set());
   const [searchParams] = useSearchParams();
   const rawGameId = searchParams.get("id");
-  const gameId = rawGameId && isUuid(rawGameId) ? rawGameId : null;
+  const paramGameId = rawGameId && isUuid(rawGameId) ? rawGameId : null;
+  const [activeGameId, setActiveGameId] = useState(null);
+  const gameId = activeGameId || paramGameId;  // Use active state if set, otherwise fall back to URL params
   const [isAdmin, setIsAdmin] = useState(false);
   const [requiresAdmin, setRequiresAdmin] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
@@ -198,6 +200,7 @@ export default function App() {
       if (!game) {
         window.history.replaceState(null, "", "/");
         setGs(null);
+        setActiveGameId(null);
         setPhase("setup");
         setIsAdmin(false);
         setRequiresAdmin(false);
@@ -205,6 +208,7 @@ export default function App() {
         return;
       }
       
+      setActiveGameId(gameId);
       const requiresPassword = Boolean(game.admin_password_hash?.trim());
       setRequiresAdmin(requiresPassword);
       setIsAdmin(!requiresPassword);
@@ -402,6 +406,7 @@ export default function App() {
       });
       
       window.history.replaceState(null, "", `?id=${game.id}`);
+      setActiveGameId(game.id);
       setIsAdmin(true);
       setRequiresAdmin(Boolean(adminPassword));
       if (adminPassword) localStorage.setItem(`admin_${game.id}`, adminPassword);
@@ -756,6 +761,7 @@ export default function App() {
       try { localStorage.clear(); } catch {}
     }
     setGs(null);
+    setActiveGameId(null);
     setPhase("setup");
     setIsAdmin(false);
     setRequiresAdmin(false);
@@ -789,7 +795,7 @@ export default function App() {
         <>
           {gameId && (
             <div style={{ padding: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #3a2800" }}>
-              <a href="/" onClick={(e) => { e.preventDefault(); window.history.replaceState(null, "", "/"); setGs(null); setPhase("setup"); setIsAdmin(false); setRequiresAdmin(false); }} style={{ color: "#c8a951", textDecoration: "none", cursor: "pointer" }}>Create New Game</a>
+              <a href="/" onClick={(e) => { e.preventDefault(); window.history.replaceState(null, "", "/"); setGs(null); setActiveGameId(null); setPhase("setup"); setIsAdmin(false); setRequiresAdmin(false); }} style={{ color: "#c8a951", textDecoration: "none", cursor: "pointer" }}>Create New Game</a>
               {requiresAdmin && !isAdmin && (
                 <button onClick={() => setShowPasswordPrompt(true)} className="btn btn-amber" style={{ fontSize: "10px", padding: "5px 10px" }}>
                   Admin Login
