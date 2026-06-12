@@ -305,6 +305,30 @@ export async function applyTileAction(gameId, teamId, action) {
   if (!isUuid(gameId) || !isUuid(teamId)) {
     throw new Error("Invalid game or team id");
   }
+  // Check latest server state to avoid applying actions against a stale snapshot.
+  try {
+    const latest = await getTeam(teamId);
+    if (latest) {
+      const serverCompleted = latest.completedPositions || Array(25).fill(false);
+      const serverReplaced = latest.replacedPositions || Array(25).fill(false);
+      const clientCompleted = action.completedPositions || Array(25).fill(false);
+      const clientReplaced = action.replacedPositions || Array(25).fill(false);
+
+      for (let i = 0; i < 25; i++) {
+        if (serverCompleted[i] && !clientCompleted[i]) {
+          console.warn('[api.applyTileAction] stale snapshot detected: server has completed tile', i);
+          return { applied: false, reason: 'stale_snapshot', latest };
+        }
+        if (serverReplaced[i] && !clientReplaced[i]) {
+          console.warn('[api.applyTileAction] stale snapshot detected: server has replaced tile', i);
+          return { applied: false, reason: 'stale_snapshot', latest };
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[api.applyTileAction] failed to fetch latest team before applying action:', e);
+    // fall through and attempt RPC — server may handle conflicts
+  }
 
   const rpcPayload = {
     p_team_id: teamId,
