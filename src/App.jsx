@@ -4,7 +4,7 @@ import { DEFAULT_TASKS } from "./data/tasks";
 import { BOSSES_DATA } from "./data/bosses";
 import { AdminPanel } from "./components/AdminPanel";
 import { GameView } from "./components/GameView";
-import { getGame, getTeams, getTeam, verifyAdminPassword, createGame, createTeam, updateTeam, markTileComplete, saveTeamState } from "./lib/api";
+import { getGame, getTeams, verifyAdminPassword, createGame, createTeam, saveTeamState, applyTileAction } from "./lib/api";
 import { supabase } from "./lib/supabase";
 
 const uid     = () => Math.random().toString(36).slice(2, 9);
@@ -135,6 +135,7 @@ export default function App() {
   const [phase, setPhase] = useState("setup");
   const [gs, setGs] = useState(null);
   const timers = useRef({});
+  const localActionIds = useRef(new Set());
   const [searchParams] = useSearchParams();
   const gameId = searchParams.get("id");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -259,17 +260,26 @@ export default function App() {
   useEffect(() => {
     if (phase === "game" && gameId && isAdmin) {
       const channel = supabase
-        .channel(`game-${gameId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter: `game_id=eq.${gameId}` }, 
-          async () => {
-            const game = await getGame(gameId);
-            if (!game) return;
-            const teams = await getTeams(gameId);
-            setGs({
-              settings: game.settings,
-              teams: teams.map(transformTeam),
-              winner: null,
-              undoFlashTeamId: null,
+        .channel(`game-actions-${gameId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_actions', filter: `game_id=eq.${gameId}` }, 
+          payload => {
+            const action = payload.new;
+            const clientActionId = action?.payload?.client_action_id;
+            if (clientActionId && localActionIds.current.has(clientActionId)) {
+              localActionIds.current.delete(clientActionId);
+              return;
+            }
+
+            const remoteTeam = action?.payload?.team ? transformTeam(action.payload.team) : null;
+            if (!remoteTeam) return;
+
+            setGs(prev => {
+              if (!prev) return prev;
+              const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
+              if (idx === -1) return prev;
+              const teams = [...prev.teams];
+              teams[idx] = { ...remoteTeam, damageFloats: [] };
+              return { ...prev, teams };
             });
           }
         )
@@ -486,6 +496,7 @@ export default function App() {
           task: tile.task,
           type: 'damage',
         };
+        const clientActionId = uid();
 
         const newBosses = team.bosses.map((b, i) => {
           if (i !== team.activeBossIndex) return b;
@@ -568,7 +579,32 @@ export default function App() {
         const newGs       = { ...g, teams: newTeams, winner: winnerTeam || null };
 
         if (gameId && isAdmin) {
-          markTileComplete(teamId, r * 5 + c, transformBack(updatedTeam)).catch(console.error);
+          localActionIds.current.add(clientActionId);
+          applyTileAction(gameId, teamId, {
+            clientActionId,
+            tileIndex: r * 5 + c,
+            row: r,
+            col: c,
+            damage: totalDmg,
+            oldActiveBossIndex: team.activeBossIndex,
+            newActiveBossIndex: newActiveIdx,
+            logEntry,
+            historySnapshot: snapshotTeam(team, g),
+            pendingReplacement,
+            completedPositions: newCompletedPositions,
+            replacedPositions: newReplacedPositions,
+            lineCompletedPositions: newLineCompletedPositions,
+            exhaustedTasks: newExhaustedTasks,
+          }).then(result => {
+            if (result?.applied === false) {
+              localActionIds.current.delete(clientActionId);
+              loadSharedGame();
+            }
+          }).catch(err => {
+            localActionIds.current.delete(clientActionId);
+            console.error("Failed to apply tile action:", err);
+          });
+          setTimeout(() => localActionIds.current.delete(clientActionId), 5000);
         }
 
         // Timer only reveals the pre-computed replacement — no task selection here.
@@ -603,10 +639,6 @@ export default function App() {
 
             const newTeams = [...prev.teams];
             newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions, replacedPositions: resolvedReplaced };
-            
-            if (gameId && isAdmin) {
-              markTileComplete(teamId, r * 5 + c, transformBack(newTeams[teamIdx])).catch(console.error);
-            }
             
             return { ...prev, teams: newTeams };
           });

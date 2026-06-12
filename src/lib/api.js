@@ -215,6 +215,30 @@ export async function markTileComplete(teamId, tileIndex, tileData) {
   }
 }
 
+export async function applyTileAction(gameId, teamId, action) {
+  const { data, error } = await supabase.rpc('apply_tile_action', {
+    p_game_id: gameId,
+    p_team_id: teamId,
+    p_client_action_id: action.clientActionId,
+    p_tile_index: action.tileIndex,
+    p_row: action.row,
+    p_col: action.col,
+    p_damage: action.damage,
+    p_old_active_boss_index: action.oldActiveBossIndex,
+    p_new_active_boss_index: action.newActiveBossIndex,
+    p_log_entry: action.logEntry || null,
+    p_history_snapshot: action.historySnapshot || null,
+    p_pending_replacement: action.pendingReplacement || null,
+    p_completed_positions: action.completedPositions,
+    p_replaced_positions: action.replacedPositions,
+    p_line_completed_positions: action.lineCompletedPositions,
+    p_exhausted_tasks: action.exhaustedTasks,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 async function markTileCompleteFallback(teamId, tileIndex, tileData) {
   const latest = await getTeam(teamId);
   
