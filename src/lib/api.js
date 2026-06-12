@@ -74,6 +74,7 @@ export async function getTeams(gameId) {
     .order('created_at');
     
   if (error) throw error;
+  console.log('[api.getTeams] fetched teams for gameId:', { gameId, count: teams.length, teams: teams.map(t => ({ id: t.id, gameId: t.game_id, name: t.name })) });
   return teams.map(t => ({
     ...t,
     board: typeof t.board === 'string' ? JSON.parse(t.board) : t.board,
@@ -103,6 +104,16 @@ export async function createTeam(gameId, teamData) {
     .single();
     
   if (error) throw error;
+  console.log('[api.createTeam] created team:', { teamId: team.id, gameId, teamName: team.name, gameIdInDb: team.game_id });
+  
+  // Verify the team was actually created with the correct game_id
+  const verification = await getTeam(team.id);
+  if (verification && verification.id === team.id) {
+    console.log('[api.createTeam] verification passed - team is in database with game_id:', verification.id, team.game_id);
+  } else {
+    console.warn('[api.createTeam] verification failed - team might not be properly saved');
+  }
+  
   return team;
 }
 

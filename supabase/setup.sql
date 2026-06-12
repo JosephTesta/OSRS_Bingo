@@ -101,6 +101,9 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN
+    RAISE LOG 'apply_tile_action: team_not_found - looking for team_id=%, game_id=%. Checking what exists...', p_team_id, p_game_id;
+    RAISE LOG 'apply_tile_action: Teams in games table: %', (SELECT jsonb_agg(row_to_json(t.*)) FROM teams t WHERE t.id = p_team_id);
+    RAISE LOG 'apply_tile_action: Games table: %', (SELECT jsonb_agg(row_to_json(g.*)) FROM games g WHERE g.id = p_game_id);
     RETURN jsonb_build_object('applied', false, 'reason', 'team_not_found');
   END IF;
 
