@@ -499,7 +499,6 @@ export default function App() {
         const team = g.teams.find(t => t.id === teamId);
         if (!team) return g;
         const tileIndex = r * 5 + c;
-        console.log("[tile-click] teamId:", teamId, "row:", r, "col:", c, "tileIndex:", tileIndex, "tile:", tile);
         if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || r > 4 || c < 0 || c > 4) {
           alert(`Invalid tile position: row ${r}, col ${c}`);
           return g;
@@ -513,6 +512,7 @@ export default function App() {
           return g;
         }
         const tile = team.board[r][c];
+        console.log("[tile-click] teamId:", teamId, "row:", r, "col:", c, "tileIndex:", tileIndex, "tile:", tile);
         if (!tile) {
           alert(`Tile not found locally at row ${r}, col ${c}.`);
           return g;

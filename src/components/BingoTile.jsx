@@ -15,11 +15,10 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
   }, [tile.id, tile.isNew]);
 
   const isDone = tile.flipped || tile.completed;
+  const isPositionResolved = isCompletedPosition || isLineCompleted || isReplaced;
   const showBack = isDone;
-  const clickable = !noClick && !isDone;
-
-  const isPositionResolved = isCompletedPosition || isLineCompleted;
-  const showOutline = isPositionResolved || isReplaced;
+  const clickable = !noClick && !isDone && !isPositionResolved;
+  const showOutline = isPositionResolved;
 
   return (
     <div
@@ -31,7 +30,7 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
         outlineOffset: showOutline ? "2px" : "0",
         boxShadow: showOutline ? (isLineCompleted ? "0 0 10px rgba(245,158,11,0.6)" : "0 0 8px rgba(200,168,75,0.5)") : "none",
       }}
-      onClick={() => clickable && onComplete(r, c)}
+      onClick={() => clickable && typeof onComplete === "function" && onComplete(r, c)}
     >
       <div className={`tile-card ${showBack ? "is-flipped" : ""} ${!clickable ? "no-click" : ""} ${animCls}`} style={{ width: "100%", height: "100%" }}>
         <div className={`tile-face tile-front ${tile.completed ? "is-done" : ""}`}>
