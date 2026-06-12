@@ -306,7 +306,9 @@ export default function App() {
   }, [gameId, isAdmin]);
 
   useEffect(() => {
-    if (phase === "game" && gameId && isAdmin) {
+    // Subscribe all connected clients (not just admins) to game actions so viewers
+    // see updates immediately when another client applies a tile action.
+    if (phase === "game" && gameId) {
       const channel = supabase
         .channel(`game-actions-${gameId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_actions', filter: `game_id=eq.${gameId}` }, 
