@@ -420,7 +420,7 @@ export default function App() {
     setPhase("game");
   }, []);
 
-  const dispatch = useCallback(action => {
+  const dispatch = useCallback(async action => {
     const canEdit = !gameId || isAdmin;
     if (!canEdit) return;
     
@@ -439,94 +439,163 @@ export default function App() {
 
     if (action.type === "UNDO") {
       const { teamId } = action;
+
+      // Read current client state snapshot
+      const clientGs = gs;
+      if (!clientGs) return;
+      const team = clientGs.teams.find(t => t.id === teamId);
+      if (!team || team.history.length === 0) {
+        console.warn('[undo] no history available for team', teamId);
+        return;
+      }
+
+      const history = [...team.history];
+      const snapshot = history.pop();
+      console.log('[undo] preparing to restore snapshot for team', teamId, 'from history depth:', history.length);
+
+      // Fetch latest server state to avoid overwriting other players' progress
+      let serverLatest = null;
+      try {
+        if (gameId) serverLatest = await getTeam(teamId);
+      } catch (e) {
+        console.error('[undo] failed to fetch latest team from server:', e);
+      }
+
+      const serverCompleted = (serverLatest && serverLatest.completedPositions) || (team.completedPositions || Array(25).fill(false));
+      const serverReplaced = (serverLatest && serverLatest.replacedPositions) || (team.replacedPositions || Array(25).fill(false));
+
+      // Build restored board from snapshot but don't revert positions that others completed
+      const restoredBoard = snapshot.board;
+      const resolvedPositions = [...(snapshot.completedPositions || Array(25).fill(false))];
+      const resolvedReplaced = [...(snapshot.replacedPositions || Array(25).fill(false))];
+
+      for (let i = 0; i < 25; i++) {
+        // If server shows this position completed/replaced after snapshot, preserve it
+        if (serverCompleted[i]) resolvedPositions[i] = true;
+        if (serverReplaced[i]) resolvedReplaced[i] = true;
+      }
+
+      const revealedBoard = restoredBoard.map((row, ri) =>
+        row.map((tl, ci) => {
+          if (!tl.flipped) return tl;
+          if (tl.pendingReplacement) {
+            // pending replacement should only be applied if server hasn't replaced it
+            const idx = ri * 5 + ci;
+            if (serverReplaced[idx]) {
+              // preserve server replacement
+              return tl;
+            }
+            resolvedPositions[idx] = false;
+            resolvedReplaced[idx] = true;
+            return { ...tl.pendingReplacement, pendingReplacement: null };
+          }
+          const idx = ri * 5 + ci;
+          // If server has this completed, don't revert it
+          if (serverCompleted[idx]) return tl;
+          resolvedPositions[idx] = true;
+          resolvedReplaced[idx] = false;
+          return { ...tl, flipped: false, completed: true, pendingReplacement: null };
+        })
+      );
+
+      // Merge bosses conservatively: don't increase HP above server latest
+      const mergedBosses = (snapshot.bosses || []).map((sb, idx) => {
+        const srv = serverLatest && serverLatest.bosses && serverLatest.bosses[idx] ? serverLatest.bosses[idx] : null;
+        const srvHp = srv ? Number(srv.currentHp || 0) : null;
+        const snapHp = Number(sb.currentHp || 0);
+        const currentHp = srvHp === null ? snapHp : Math.min(srvHp, snapHp);
+        const defeated = Boolean(sb.defeated) || (srv ? Boolean(srv.defeated) : false) || currentHp <= 0;
+        return { ...sb, currentHp, defeated };
+      });
+
+      // Compute restore log entry only if we're actually restoring any HP locally
+      const damagedBossIdx = snapshot.activeBossIndex;
+      const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? team.bosses[damagedBossIdx]?.currentHp;
+      const snapBossHp = snapshot.bosses[damagedBossIdx]?.currentHp;
+      const dmg_restored = snapBossHp && serverBossHp != null ? Math.max(0, snapBossHp - serverBossHp) : 0;
+
+      const restoreLogEntry = {
+        id: uid(),
+        time: fmtTime(),
+        damage: dmg_restored || 0,
+        boss: snapshot.bosses[damagedBossIdx]?.name || 'Unknown',
+        task: '',
+        type: 'restore',
+      };
+
+      const updatedTeam = {
+        ...team,
+        bosses:                 mergedBosses,
+        activeBossIndex:        snapshot.activeBossIndex,
+        board:                  revealedBoard,
+        exhaustedTasks:         snapshot.exhaustedTasks,
+        completedPositions:     resolvedPositions,
+        replacedPositions:      resolvedReplaced,
+        lineCompletedPositions: snapshot.lineCompletedPositions,
+        log:                    [...team.log, restoreLogEntry],
+        damageFloats:           [],
+        history,
+      };
+
       setGs(g => {
         if (!g) return g;
-        const team = g.teams.find(t => t.id === teamId);
-        if (!team || team.history.length === 0) {
-          console.warn('[undo] no history available for team', teamId);
-          return g;
-        }
-
-        const history = [...team.history];
-        const snapshot = history.pop();
-
-        console.log('[undo] restoring snapshot for team', teamId, 'from history depth:', history.length);
-
-        const damagedBossIdx = snapshot.activeBossIndex;
-        const dmg_restored = snapshot.bosses[damagedBossIdx]?.currentHp - team.bosses[damagedBossIdx]?.currentHp;
-
-        const restoreLogEntry = {
-          id: uid(),
-          time: fmtTime(),
-          damage: dmg_restored || 0,
-          boss: snapshot.bosses[damagedBossIdx]?.name || 'Unknown',
-          task: '',
-          type: 'restore',
-        };
-
-        const restoredBoard = snapshot.board;
-        const resolvedPositions = [...(snapshot.completedPositions || Array(25).fill(false))];
-        const resolvedReplaced = [...(snapshot.replacedPositions || Array(25).fill(false))];
-        
-        // Preserve any completed positions that were marked by other teams or changes
-        const preservedCompleted = [...(team.completedPositions || Array(25).fill(false))];
-        for (let i = 0; i < 25; i++) {
-          if (!resolvedPositions[i] && preservedCompleted[i]) {
-            resolvedPositions[i] = preservedCompleted[i];
-          }
-        }
-
-        const revealedBoard = restoredBoard.map((row, ri) =>
-          row.map((tl, ci) => {
-            if (!tl.flipped) return tl;
-            if (tl.pendingReplacement) {
-              resolvedPositions[ri * 5 + ci] = false;
-              resolvedReplaced[ri * 5 + ci] = true;
-              return { ...tl.pendingReplacement, pendingReplacement: null };
-            }
-            resolvedPositions[ri * 5 + ci] = true;
-            resolvedReplaced[ri * 5 + ci] = false;
-            return { ...tl, flipped: false, completed: true, pendingReplacement: null };
-          })
-        );
-
-        const updatedTeam = {
-          ...team,
-          bosses:                 snapshot.bosses,
-          activeBossIndex:        snapshot.activeBossIndex,
-          board:                  revealedBoard,
-          exhaustedTasks:         snapshot.exhaustedTasks,
-          completedPositions:     resolvedPositions,
-          replacedPositions:      resolvedReplaced,
-          lineCompletedPositions: snapshot.lineCompletedPositions,
-          log:                    [...team.log, restoreLogEntry],
-          damageFloats:           [],
-          history,
-        };
-
         const newTeams = g.teams.map(t => t.id === teamId ? updatedTeam : t);
         const winner = g.winner && newTeams.find(t => t.id === g.winner.id)?.bosses.every(b => b.defeated)
           ? g.winner : null;
-        const newGs = { ...g, teams: newTeams, winner, undoFlashTeamId: teamId };
-        
-        if (gameId && isAdmin) {
-          console.log('[undo] saving undone team state to database');
-          saveTeamState(teamId, transformBack(updatedTeam)).catch(err => {
-            console.error('[undo] failed to save undo state:', err);
-          });
-        }
-        
-        return newGs;
+        return { ...g, teams: newTeams, winner, undoFlashTeamId: teamId };
       });
+
+      if (gameId && isAdmin) {
+        console.log('[undo] saving undone team state to database');
+        saveTeamState(teamId, transformBack(updatedTeam)).catch(err => {
+          console.error('[undo] failed to save undo state:', err);
+        });
+      }
+
       setTimeout(() => setGs(g => g ? { ...g, undoFlashTeamId: null } : g), 600);
     }
 
     if (action.type === "TILE_CLICK") {
       const { teamId, r, c } = action;
 
+      // Before applying optimistic update, fetch latest server state to incorporate
+      // any completed/replaced tiles or boss changes made by other clients.
+      let serverLatest = null;
+      try {
+        if (gameId) serverLatest = await getTeam(teamId);
+      } catch (e) {
+        console.error('[tile-click] failed to fetch latest team from server:', e);
+      }
+
       setGs(g => {
         if (!g || g.winner) return g;
-        const team = g.teams.find(t => t.id === teamId);
+        let team = g.teams.find(t => t.id === teamId);
+        // If we have a server state, merge completed/replaced/board/bosses conservatively
+        if (serverLatest && team && serverLatest.id === teamId) {
+          try {
+            const serverCompleted = serverLatest.completedPositions || Array(25).fill(false);
+            const serverReplaced = serverLatest.replacedPositions || Array(25).fill(false);
+            const serverBoard = serverLatest.board || team.board;
+            const serverBosses = serverLatest.bosses || team.bosses;
+
+            const mergedCompleted = (team.completedPositions || Array(25).fill(false)).map((v, i) => Boolean(v) || Boolean(serverCompleted[i]));
+            const mergedReplaced = (team.replacedPositions || Array(25).fill(false)).map((v, i) => Boolean(v) || Boolean(serverReplaced[i]));
+
+            // Merge bosses: prefer the lower currentHp (preserve damage applied by others)
+            const mergedBosses = (team.bosses || []).map((b, i) => {
+              const sb = serverBosses[i] || {};
+              const tbHp = Number(b.currentHp || 0);
+              const sbHp = Number(sb.currentHp || tbHp);
+              const currentHp = Math.min(tbHp, sbHp);
+              const defeated = Boolean(b.defeated) || Boolean(sb.defeated) || currentHp <= 0;
+              return { ...b, ...sb, currentHp, defeated };
+            });
+
+            team = { ...team, board: serverBoard, bosses: mergedBosses, completedPositions: mergedCompleted, replacedPositions: mergedReplaced };
+          } catch (e) {
+            console.error('[tile-click] error merging server state:', e);
+          }
+        }
         if (!team) return g;
         const tileIndex = r * 5 + c;
         if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || r > 4 || c < 0 || c > 4) {
