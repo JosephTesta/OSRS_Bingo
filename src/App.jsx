@@ -442,19 +442,24 @@ export default function App() {
       setGs(g => {
         if (!g) return g;
         const team = g.teams.find(t => t.id === teamId);
-        if (!team || team.history.length === 0) return g;
+        if (!team || team.history.length === 0) {
+          console.warn('[undo] no history available for team', teamId);
+          return g;
+        }
 
         const history = [...team.history];
         const snapshot = history.pop();
 
+        console.log('[undo] restoring snapshot for team', teamId, 'from history depth:', history.length);
+
         const damagedBossIdx = snapshot.activeBossIndex;
-        const dmg_restored = snapshot.bosses[damagedBossIdx].currentHp - team.bosses[damagedBossIdx].currentHp;
+        const dmg_restored = snapshot.bosses[damagedBossIdx]?.currentHp - team.bosses[damagedBossIdx]?.currentHp;
 
         const restoreLogEntry = {
           id: uid(),
           time: fmtTime(),
-          damage: dmg_restored,
-          boss: snapshot.bosses[damagedBossIdx].name,
+          damage: dmg_restored || 0,
+          boss: snapshot.bosses[damagedBossIdx]?.name || 'Unknown',
           task: '',
           type: 'restore',
         };
@@ -462,6 +467,15 @@ export default function App() {
         const restoredBoard = snapshot.board;
         const resolvedPositions = [...(snapshot.completedPositions || Array(25).fill(false))];
         const resolvedReplaced = [...(snapshot.replacedPositions || Array(25).fill(false))];
+        
+        // Preserve any completed positions that were marked by other teams or changes
+        const preservedCompleted = [...(team.completedPositions || Array(25).fill(false))];
+        for (let i = 0; i < 25; i++) {
+          if (!resolvedPositions[i] && preservedCompleted[i]) {
+            resolvedPositions[i] = preservedCompleted[i];
+          }
+        }
+
         const revealedBoard = restoredBoard.map((row, ri) =>
           row.map((tl, ci) => {
             if (!tl.flipped) return tl;
@@ -496,7 +510,10 @@ export default function App() {
         const newGs = { ...g, teams: newTeams, winner, undoFlashTeamId: teamId };
         
         if (gameId && isAdmin) {
-          saveTeamState(teamId, transformBack(updatedTeam)).catch(console.error);
+          console.log('[undo] saving undone team state to database');
+          saveTeamState(teamId, transformBack(updatedTeam)).catch(err => {
+            console.error('[undo] failed to save undo state:', err);
+          });
         }
         
         return newGs;
@@ -700,50 +717,65 @@ export default function App() {
         const key = `${teamId}-${r}-${c}`;
         clearTimeout(timers.current[key]);
         timers.current[key] = setTimeout(() => {
-          setGs(prev => {
-            if (!prev) return prev;
-            const teamIdx = prev.teams.findIndex(t => t.id === teamId);
-            if (teamIdx === -1) return prev;
-            const t    = prev.teams[teamIdx];
-            const tile = t.board[r]?.[c];
+          try {
+            setGs(prev => {
+              if (!prev) return prev;
+              const teamIdx = prev.teams.findIndex(t => t.id === teamId);
+              if (teamIdx === -1) {
+                console.warn('[tile-click] team not found during replacement reveal');
+                return prev;
+              }
+              const t    = prev.teams[teamIdx];
+              const tile = t.board[r]?.[c];
 
-            // If this tile was undone (restored to flipped:false), skip silently.
-            if (!tile?.flipped) return prev;
+              // If this tile was undone (restored to flipped:false), skip silently.
+              if (!tile?.flipped) {
+                console.log('[tile-click] tile was undone, skipping replacement reveal');
+                return prev;
+              }
 
-            const resolvedPositions = [...(t.completedPositions || Array(25).fill(false))];
-            const resolvedReplaced = [...(t.replacedPositions || Array(25).fill(false))];
-            const board = t.board.map((row, ri) =>
-              row.map((tl, ci) => {
-                if (ri !== r || ci !== c) return tl;
-                if (tl.pendingReplacement) {
-                  resolvedPositions[r * 5 + c] = false;
-                  resolvedReplaced[r * 5 + c] = true;
-                  return { ...tl.pendingReplacement, pendingReplacement: null };
-                }
-                resolvedPositions[r * 5 + c] = true;
-                resolvedReplaced[r * 5 + c] = false;
-                return { ...tl, flipped: false, completed: true, pendingReplacement: null };
-              })
-            );
+              const resolvedPositions = [...(t.completedPositions || Array(25).fill(false))];
+              const resolvedReplaced = [...(t.replacedPositions || Array(25).fill(false))];
+              const board = t.board.map((row, ri) =>
+                row.map((tl, ci) => {
+                  if (ri !== r || ci !== c) return tl;
+                  if (tl.pendingReplacement) {
+                    resolvedPositions[r * 5 + c] = false;
+                    resolvedReplaced[r * 5 + c] = true;
+                    console.log('[tile-click] replacement revealed for ', r, c);
+                    return { ...tl.pendingReplacement, pendingReplacement: null };
+                  }
+                  resolvedPositions[r * 5 + c] = true;
+                  resolvedReplaced[r * 5 + c] = false;
+                  return { ...tl, flipped: false, completed: true, pendingReplacement: null };
+                })
+              );
 
-            const newTeams = [...prev.teams];
-            newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions, replacedPositions: resolvedReplaced };
-            
-            return { ...prev, teams: newTeams };
-          });
+              const newTeams = [...prev.teams];
+              newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions, replacedPositions: resolvedReplaced };
+              
+              return { ...prev, teams: newTeams };
+            });
+          } catch (err) {
+            console.error('[tile-click] error in replacement reveal timer:', err);
+          }
         }, 1400);
 
         // Clean up damage float after animation.
         setTimeout(() => {
-          setGs(prev => {
-            if (!prev) return prev;
-            const teams = prev.teams.map(t =>
-              t.id === teamId
-                ? { ...t, damageFloats: (t.damageFloats || []).filter(f => f.id !== floatId) }
-                : t
-            );
-            return { ...prev, teams };
-          });
+          try {
+            setGs(prev => {
+              if (!prev) return prev;
+              const teams = prev.teams.map(t =>
+                t.id === teamId
+                  ? { ...t, damageFloats: (t.damageFloats || []).filter(f => f.id !== floatId) }
+                  : t
+              );
+              return { ...prev, teams };
+            });
+          } catch (err) {
+            console.error('[tile-click] error in damage float cleanup:', err);
+          }
         }, 1650);
 
         return newGs;
