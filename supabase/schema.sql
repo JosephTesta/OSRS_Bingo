@@ -89,6 +89,8 @@ DECLARE
   v_payload JSONB;
   v_new_active INTEGER;
   v_has_replacement BOOLEAN;
+  v_row INTEGER;
+  v_col INTEGER;
 BEGIN
   SELECT t.*, g.settings INTO v_team
   FROM teams t
@@ -100,7 +102,13 @@ BEGIN
     RETURN jsonb_build_object('applied', false, 'reason', 'team_not_found');
   END IF;
 
-  v_tile := v_team.board #> ARRAY[p_row::text, p_col::text];
+  v_row := p_tile_index / 5;
+  v_col := p_tile_index % 5;
+  IF v_row < 0 OR v_row > 4 OR v_col < 0 OR v_col > 4 THEN
+    RETURN jsonb_build_object('applied', false, 'reason', 'invalid_tile_index');
+  END IF;
+
+  v_tile := v_team.board #> ARRAY[v_row::text, v_col::text];
   IF v_tile IS NULL THEN
     RETURN jsonb_build_object('applied', false, 'reason', 'tile_not_found');
   END IF;
@@ -128,12 +136,12 @@ BEGIN
   v_has_replacement := p_pending_replacement IS NOT NULL AND (p_pending_replacement ? 'id');
 
   IF v_has_replacement THEN
-    v_board := jsonb_set(v_board, ARRAY[p_row::text, p_col::text], p_pending_replacement, true);
+    v_board := jsonb_set(v_board, ARRAY[v_row::text, v_col::text], p_pending_replacement, true);
   ELSE
     v_tile := jsonb_set(v_tile, '{flipped}'::text[], 'false'::jsonb, true);
     v_tile := jsonb_set(v_tile, '{completed}'::text[], 'true'::jsonb, true);
     v_tile := jsonb_set(v_tile, '{pendingReplacement}'::text[], 'null'::jsonb, true);
-    v_board := jsonb_set(v_board, ARRAY[p_row::text, p_col::text], v_tile, true);
+    v_board := jsonb_set(v_board, ARRAY[v_row::text, v_col::text], v_tile, true);
   END IF;
 
   v_completed := COALESCE(v_team.completed_positions, ARRAY[false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]::boolean[]);

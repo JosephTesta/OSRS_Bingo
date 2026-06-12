@@ -219,15 +219,26 @@ export default function App() {
     }
   }
 
+  function normalizeBoolArray(value) {
+    const fallback = Array(25).fill(false);
+    if (!Array.isArray(value)) return fallback;
+    return Array.from({ length: 25 }, (_, i) => Boolean(value[i]));
+  }
+
+  function normalizeBoard(value) {
+    if (!Array.isArray(value) || value.length !== 5) return Array.from({ length: 5 }, () => Array(5).fill(null));
+    return value.map(row => Array.isArray(row) && row.length === 5 ? row : Array(5).fill(null));
+  }
+
   function transformTeam(team) {
     return {
       id: team.id,
       name: team.name,
-      board: team.board,
+      board: normalizeBoard(team.board),
       exhaustedTasks: team.exhausted_tasks || [],
-      completedPositions: team.completed_positions || Array(25).fill(false),
-      lineCompletedPositions: team.line_completed_positions || Array(25).fill(false),
-      replacedPositions: team.replaced_positions || Array(25).fill(false),
+      completedPositions: normalizeBoolArray(team.completed_positions),
+      lineCompletedPositions: normalizeBoolArray(team.line_completed_positions),
+      replacedPositions: normalizeBoolArray(team.replaced_positions),
       bosses: team.bosses,
       activeBossIndex: team.active_boss_index || 0,
       log: team.log || [],
@@ -462,7 +473,27 @@ export default function App() {
         if (!g || g.winner) return g;
         const team = g.teams.find(t => t.id === teamId);
         if (!team) return g;
+        const tileIndex = r * 5 + c;
+        if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || r > 4 || c < 0 || c > 4) {
+          alert(`Invalid tile position: row ${r}, col ${c}`);
+          return g;
+        }
+        if (!isUuid(teamId)) {
+          alert(`This game uses an old team id (${teamId}). Create a new game to enable shared editing.`);
+          return g;
+        }
+        if (!Array.isArray(team.board) || team.board.length !== 5 || !Array.isArray(team.board[r]) || team.board[r].length !== 5) {
+          alert("This game board is corrupted. Create a new game.");
+          return g;
+        }
         const tile = team.board[r][c];
+        if (!tile) {
+          alert(`Tile not found locally at row ${r}, col ${c}.`);
+          return g;
+        }
+        if (team.completedPositions?.[tileIndex] || team.replacedPositions?.[tileIndex]) {
+          return g;
+        }
         if (tile.flipped || tile.completed) return g;
         const boss = team.bosses[team.activeBossIndex];
         if (!boss || boss.defeated) return g;
