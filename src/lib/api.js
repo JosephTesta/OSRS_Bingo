@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = value => typeof value === "string" && uuidPattern.test(value);
+
 export async function createGame(settings, adminPassword) {
   const passwordHash = adminPassword ? btoa(adminPassword) : "";
   
@@ -21,6 +24,8 @@ export async function createGame(settings, adminPassword) {
 }
 
 export async function getGame(gameId) {
+  if (!isUuid(gameId)) return null;
+
   const { data: game, error } = await supabase
     .from('games')
     .select('*')
@@ -58,6 +63,8 @@ export async function updateGameSettings(gameId, settings) {
 }
 
 export async function getTeams(gameId) {
+  if (!isUuid(gameId)) return [];
+
   const { data: teams, error } = await supabase
     .from('teams')
     .select('*')
@@ -216,6 +223,10 @@ export async function markTileComplete(teamId, tileIndex, tileData) {
 }
 
 export async function applyTileAction(gameId, teamId, action) {
+  if (!isUuid(gameId) || !isUuid(teamId)) {
+    throw new Error("Invalid game or team id");
+  }
+
   const { data, error } = await supabase.rpc('apply_tile_action', {
     p_game_id: gameId,
     p_team_id: teamId,

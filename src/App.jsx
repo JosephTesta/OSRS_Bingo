@@ -10,6 +10,8 @@ import { supabase } from "./lib/supabase";
 const uid     = () => Math.random().toString(36).slice(2, 9);
 const randInt = (mn, mx) => Math.floor(Math.random() * (mx - mn + 1)) + mn;
 const fmtTime = () => new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = value => typeof value === "string" && uuidPattern.test(value);
 
 const shuffle = arr => {
   const a = [...arr];
@@ -137,7 +139,8 @@ export default function App() {
   const timers = useRef({});
   const localActionIds = useRef(new Set());
   const [searchParams] = useSearchParams();
-  const gameId = searchParams.get("id");
+  const rawGameId = searchParams.get("id");
+  const gameId = rawGameId && isUuid(rawGameId) ? rawGameId : null;
   const [isAdmin, setIsAdmin] = useState(false);
   const [requiresAdmin, setRequiresAdmin] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
@@ -152,10 +155,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (rawGameId && !isUuid(rawGameId)) {
+      window.history.replaceState(null, "", "/");
+      setGs(null);
+      setPhase("setup");
+      setIsAdmin(false);
+      setRequiresAdmin(false);
+      return;
+    }
+
     if (gameId) {
       loadSharedGame();
     }
-  }, [gameId]);
+  }, [rawGameId, gameId]);
 
   useEffect(() => {
     if (gs && gameId && requiresAdmin) {
@@ -603,6 +615,8 @@ export default function App() {
           }).catch(err => {
             localActionIds.current.delete(clientActionId);
             console.error("Failed to apply tile action:", err);
+            loadSharedGame();
+            alert("Could not save this tile action to the database. The page will resync with the latest saved game state.");
           });
           setTimeout(() => localActionIds.current.delete(clientActionId), 5000);
         }
