@@ -89,15 +89,15 @@ export async function createTeam(gameId, teamData) {
     .insert({
       game_id: gameId,
       name: teamData.name,
-      board: JSON.stringify(teamData.board),
+      board: teamData.board,
       exhausted_tasks: teamData.exhausted_tasks,
       completed_positions: teamData.completed_positions,
       line_completed_positions: teamData.line_completed_positions,
       replaced_positions: teamData.replaced_positions,
-      bosses: JSON.stringify(teamData.bosses),
+      bosses: teamData.bosses,
       active_boss_index: teamData.active_boss_index,
-      log: JSON.stringify(teamData.log || []),
-      history: JSON.stringify(teamData.history || []),
+      log: teamData.log || [],
+      history: teamData.history || [],
     })
     .select()
     .single();
@@ -109,10 +109,10 @@ export async function createTeam(gameId, teamData) {
 export async function updateTeam(teamId, updates) {
   const dbUpdates = {
     ...updates,
-    board: updates.board ? JSON.stringify(updates.board) : undefined,
-    bosses: updates.bosses ? JSON.stringify(updates.bosses) : undefined,
-    log: updates.log ? JSON.stringify(updates.log) : undefined,
-    history: updates.history ? JSON.stringify(updates.history) : undefined,
+    board: updates.board,
+    bosses: updates.bosses,
+    log: updates.log,
+    history: updates.history,
   };
   
   const { error } = await supabase
@@ -185,10 +185,10 @@ async function saveTeamStateFallback(teamId, teamData) {
     line_completed_positions: mergedLineCompleted,
     replaced_positions: mergedReplaced,
     exhausted_tasks: mergedExhausted,
-    log: JSON.stringify(mergedLog),
-    history: JSON.stringify(mergedHistory),
-    board: JSON.stringify(teamData.board || latest.board),
-    bosses: JSON.stringify(teamData.bosses || latest.bosses),
+    log: mergedLog,
+    history: mergedHistory,
+    board: teamData.board || latest.board,
+    bosses: teamData.bosses || latest.bosses,
     active_boss_index: teamData.active_boss_index ?? latest.activeBossIndex,
   };
   
@@ -288,10 +288,10 @@ async function markTileCompleteFallback(teamId, tileIndex, tileData) {
     replaced_positions: currentReplaced,
     line_completed_positions: currentLineCompleted,
     exhausted_tasks: tileData.exhaustedTasks || latest.exhaustedTasks,
-    log: JSON.stringify(mergedLog),
-    history: JSON.stringify(mergedHistory),
-    board: JSON.stringify(tileData.board || latest.board),
-    bosses: JSON.stringify(tileData.bosses || latest.bosses),
+    log: mergedLog,
+    history: mergedHistory,
+    board: tileData.board || latest.board,
+    bosses: tileData.bosses || latest.bosses,
     active_boss_index: tileData.activeBossIndex ?? latest.activeBossIndex,
   };
   
