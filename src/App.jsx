@@ -381,6 +381,12 @@ export default function App() {
       savedTeams.forEach((savedTeam, i) => {
         if (savedTeam?.id) teams[i].id = savedTeam.id;
       });
+
+      const dbTeams = await getTeams(game.id);
+      dbTeams.forEach(dbTeam => {
+        const localTeam = teams.find(t => t.name === dbTeam.name);
+        if (localTeam && dbTeam.id) localTeam.id = dbTeam.id;
+      });
       
       window.history.replaceState(null, "", `?id=${game.id}`);
       setIsAdmin(true);
