@@ -309,33 +309,68 @@ export default function App() {
     // Subscribe all connected clients (not just admins) to game actions so viewers
     // see updates immediately when another client applies a tile action.
     if (phase === "game" && gameId) {
-      const channel = supabase
-        .channel(`game-actions-${gameId}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_actions', filter: `game_id=eq.${gameId}` }, 
-          payload => {
-            const action = payload.new;
-            const clientActionId = action?.payload?.client_action_id;
-            if (clientActionId && localActionIds.current.has(clientActionId)) {
-              localActionIds.current.delete(clientActionId);
-              return;
-            }
+      const channel = supabase.channel(`game-actions-${gameId}`);
+      channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_actions', filter: `game_id=eq.${gameId}` }, payload => {
+        console.log('[realtime] channel payload received:', payload);
+        const action = payload.new;
+        const clientActionId = action?.payload?.client_action_id;
+        if (clientActionId && localActionIds.current.has(clientActionId)) {
+          localActionIds.current.delete(clientActionId);
+          return;
+        }
 
-            const remoteTeam = action?.payload?.team ? transformTeam(action.payload.team) : null;
-            if (!remoteTeam) return;
+        const remoteTeam = action?.payload?.team ? transformTeam(action.payload.team) : null;
+        if (!remoteTeam) return;
 
-            setGs(prev => {
-              if (!prev) return prev;
-              const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
-              if (idx === -1) return prev;
-              const teams = [...prev.teams];
-              teams[idx] = { ...remoteTeam, damageFloats: [] };
-              return { ...prev, teams };
-            });
+        setGs(prev => {
+          if (!prev) return prev;
+          const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
+          if (idx === -1) return prev;
+          const teams = [...prev.teams];
+          teams[idx] = { ...remoteTeam, damageFloats: [] };
+          return { ...prev, teams };
+        });
+      });
+
+      // Subscribe and log status
+      try {
+        const sub = channel.subscribe(status => console.log('[realtime] channel subscribe status:', status));
+        console.log('[realtime] channel object:', channel, 'subscribe result:', sub);
+      } catch (e) {
+        console.error('[realtime] channel.subscribe() threw:', e);
+      }
+
+      // Fallback listener using supabase.from()
+      let fromSub = null;
+      try {
+        fromSub = supabase.from(`game_actions:game_id=eq.${gameId}`).on('INSERT', payload => {
+          console.log('[realtime] from() payload received:', payload);
+          const action = payload.new;
+          const clientActionId = action?.payload?.client_action_id;
+          if (clientActionId && localActionIds.current.has(clientActionId)) {
+            localActionIds.current.delete(clientActionId);
+            return;
           }
-        )
-        .subscribe();
+          const remoteTeam = action?.payload?.team ? transformTeam(action.payload.team) : null;
+          if (!remoteTeam) return;
+          setGs(prev => {
+            if (!prev) return prev;
+            const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
+            if (idx === -1) return prev;
+            const teams = [...prev.teams];
+            teams[idx] = { ...remoteTeam, damageFloats: [] };
+            return { ...prev, teams };
+          });
+        }).subscribe();
+        console.log('[realtime] from() subscription created', fromSub);
+      } catch (e) {
+        console.error('[realtime] supabase.from() subscribe threw:', e);
+      }
 
-      return () => supabase.removeChannel(channel);
+      return () => {
+        try { supabase.removeChannel(channel); } catch (e) { console.warn('removeChannel failed', e); }
+        try { if (fromSub) supabase.removeSubscription(fromSub); } catch (e) { /* ignore */ }
+      };
     }
   }, [phase, gameId, isAdmin]);
 
