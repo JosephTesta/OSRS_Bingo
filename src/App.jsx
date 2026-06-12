@@ -611,12 +611,14 @@ export default function App() {
             if (result?.applied === false) {
               localActionIds.current.delete(clientActionId);
               loadSharedGame();
+              alert(`Could not apply this tile action: ${result.reason || 'unknown reason'}`);
             }
           }).catch(err => {
             localActionIds.current.delete(clientActionId);
             console.error("Failed to apply tile action:", err);
             loadSharedGame();
-            alert("Could not save this tile action to the database. The page will resync with the latest saved game state.");
+            const message = err?.message || err?.details || JSON.stringify(err);
+            alert(`Could not save this tile action to the database: ${message}`);
           });
           setTimeout(() => localActionIds.current.delete(clientActionId), 5000);
         }

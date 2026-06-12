@@ -201,24 +201,20 @@ BEGIN
   WHERE id = p_team_id
   RETURNING * INTO v_team;
 
-  INSERT INTO game_actions (game_id, team_id, action_type, payload)
-  VALUES (
-    p_game_id,
-    p_team_id,
-    'TILE_CLICK',
-    jsonb_build_object('client_action_id', p_client_action_id, 'action_type', 'TILE_CLICK')
-  )
-  RETURNING id INTO v_action_id;
-
   v_payload := jsonb_build_object(
     'client_action_id', p_client_action_id,
     'action_type', 'TILE_CLICK',
     'team', to_jsonb(v_team)
   );
 
-  UPDATE game_actions
-  SET payload = v_payload
-  WHERE id = v_action_id;
+  INSERT INTO game_actions (game_id, team_id, action_type, payload)
+  VALUES (
+    p_game_id,
+    p_team_id,
+    'TILE_CLICK',
+    v_payload
+  )
+  RETURNING id INTO v_action_id;
 
   RETURN jsonb_build_object('applied', true, 'action_id', v_action_id, 'team', v_team);
 END;
