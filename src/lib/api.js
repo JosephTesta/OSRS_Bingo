@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 export async function createGame(settings, adminPassword) {
-  const passwordHash = btoa(adminPassword);
+  const passwordHash = adminPassword ? btoa(adminPassword) : "";
   
   const { data: game, error } = await supabase
     .from('games')

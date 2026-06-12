@@ -2,7 +2,7 @@ import { TeamCard } from "./TeamCard";
 import { VictoryScreen } from "./VictoryScreen";
 import { useState } from "react";
 
-export function GameView({ gs, dispatch, onReset, onExport, isAdmin = true }) {
+export function GameView({ gs, dispatch, onReset, onExport, isAdmin = true, requiresAdmin = true }) {
   const { teams, winner } = gs;
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -50,7 +50,9 @@ export function GameView({ gs, dispatch, onReset, onExport, isAdmin = true }) {
           <div style={{ background: "#1a0e00", padding: "30px", borderRadius: "8px", border: "1px solid #c8a951", maxWidth: "450px", width: "90%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
             <h2 style={{ color: "#c8a951", marginBottom: "20px", fontFamily: "Cinzel, serif", fontSize: "20px" }}>Share This Game</h2>
             <p style={{ color: "#8b6520", marginBottom: "15px", fontSize: "13px" }}>
-              Share this link with others to let them view the game. Use admin login to make changes.
+              {requiresAdmin
+                ? "Share this link with others to let them view the game. Use admin login to make changes."
+                : "Share this link with others to let them edit the game."}
             </p>
             <div style={{ display: "flex", gap: "8px", marginBottom: "15px" }}>
               <input
