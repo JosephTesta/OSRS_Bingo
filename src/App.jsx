@@ -8,6 +8,14 @@ import { getGame, getTeams, verifyAdminPassword, createGame, createTeam, saveTea
 import { supabase } from "./lib/supabase";
 
 const uid     = () => Math.random().toString(36).slice(2, 9);
+const uuid    = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 const randInt = (mn, mx) => Math.floor(Math.random() * (mx - mn + 1)) + mn;
 const fmtTime = () => new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -327,7 +335,7 @@ export default function App() {
         ? makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, true)
         : { board: JSON.parse(JSON.stringify(sharedBoard.board)), exhaustedTasks: [...sharedBoard.exhaustedTasks] };
       return {
-        id: uid(),
+        id: uuid(),
         name,
         board,
         exhaustedTasks,
@@ -353,8 +361,9 @@ export default function App() {
     try {
       const game = await createGame(cleanSettings, adminPassword);
       
+      const savedTeams = [];
       for (const team of teams) {
-        await createTeam(game.id, {
+        const savedTeam = await createTeam(game.id, {
           name: team.name,
           board: team.board,
           exhausted_tasks: team.exhaustedTasks,
@@ -366,7 +375,12 @@ export default function App() {
           log: team.log,
           history: team.history,
         });
+        savedTeams.push(savedTeam);
       }
+
+      savedTeams.forEach((savedTeam, i) => {
+        if (savedTeam?.id) teams[i].id = savedTeam.id;
+      });
       
       window.history.replaceState(null, "", `?id=${game.id}`);
       setIsAdmin(true);
