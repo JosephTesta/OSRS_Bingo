@@ -31,6 +31,7 @@ export async function getGame(gameId) {
     .select('*')
     .eq('id', gameId)
     .maybeSingle();
+  console.log("[api.getGame] response:", { gameId, game, error });
     
   if (error) {
     console.error("Failed to get game:", error.message);
@@ -231,7 +232,7 @@ export async function applyTileAction(gameId, teamId, action) {
     throw new Error("Invalid game or team id");
   }
 
-  const { data, error } = await supabase.rpc('apply_tile_action', {
+  const rpcPayload = {
     p_game_id: gameId,
     p_team_id: teamId,
     p_client_action_id: action.clientActionId,
@@ -248,7 +249,11 @@ export async function applyTileAction(gameId, teamId, action) {
     p_replaced_positions: action.replacedPositions,
     p_line_completed_positions: action.lineCompletedPositions,
     p_exhausted_tasks: action.exhaustedTasks,
-  });
+  };
+  console.log("[api.applyTileAction] rpc payload:", rpcPayload);
+
+  const { data, error } = await supabase.rpc('apply_tile_action', rpcPayload);
+  console.log("[api.applyTileAction] rpc response:", { data, error });
 
   if (error) throw error;
   return data;

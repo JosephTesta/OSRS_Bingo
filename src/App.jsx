@@ -499,6 +499,7 @@ export default function App() {
         const team = g.teams.find(t => t.id === teamId);
         if (!team) return g;
         const tileIndex = r * 5 + c;
+        console.log("[tile-click] teamId:", teamId, "row:", r, "col:", c, "tileIndex:", tileIndex, "tile:", tile);
         if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || r > 4 || c < 0 || c > 4) {
           alert(`Invalid tile position: row ${r}, col ${c}`);
           return g;
@@ -647,10 +648,9 @@ export default function App() {
         const newGs       = { ...g, teams: newTeams, winner: winnerTeam || null };
 
         if (gameId && isAdmin) {
-          localActionIds.current.add(clientActionId);
-          applyTileAction(gameId, teamId, {
+          const actionPayload = {
             clientActionId,
-            tileIndex: r * 5 + c,
+            tileIndex,
             row: r,
             col: c,
             damage: totalDmg,
@@ -663,7 +663,11 @@ export default function App() {
             replacedPositions: newReplacedPositions,
             lineCompletedPositions: newLineCompletedPositions,
             exhaustedTasks: newExhaustedTasks,
-          }).then(result => {
+          };
+          console.log("[tile-click] applying action:", actionPayload);
+          localActionIds.current.add(clientActionId);
+          applyTileAction(gameId, teamId, actionPayload).then(result => {
+            console.log("[tile-click] rpc result:", result);
             if (result?.applied === false) {
               localActionIds.current.delete(clientActionId);
               loadSharedGame();
