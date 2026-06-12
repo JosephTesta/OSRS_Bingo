@@ -196,6 +196,11 @@ export default function App() {
     try {
       const game = await getGame(gameId);
       if (!game) {
+        window.history.replaceState(null, "", "/");
+        setGs(null);
+        setPhase("setup");
+        setIsAdmin(false);
+        setRequiresAdmin(false);
         alert("Game not found");
         return;
       }

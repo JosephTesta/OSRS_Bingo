@@ -30,12 +30,13 @@ export async function getGame(gameId) {
     .from('games')
     .select('*')
     .eq('id', gameId)
-    .single();
+    .maybeSingle();
     
   if (error) {
     console.error("Failed to get game:", error.message);
     return null;
   }
+  if (!game) return null;
   return {
     ...game,
     settings: typeof game.settings === 'string' ? JSON.parse(game.settings) : game.settings
@@ -122,13 +123,16 @@ export async function updateTeam(teamId, updates) {
 }
 
 export async function getTeam(teamId) {
+  if (!isUuid(teamId)) return null;
+
   const { data: team, error } = await supabase
     .from('teams')
     .select('*')
     .eq('id', teamId)
-    .single();
+    .maybeSingle();
     
   if (error) throw error;
+  if (!team) return null;
   return {
     ...team,
     board: typeof team.board === 'string' ? JSON.parse(team.board) : team.board,
