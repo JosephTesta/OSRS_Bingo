@@ -157,17 +157,80 @@ export async function getTeam(teamId) {
 export async function saveTeamState(teamId, teamData) {
   console.log('saveTeamState called', teamId);
   try {
-    const { data, error } = await supabase.rpc('save_team_state', {
-      p_team_id: teamId,
-      p_board: JSON.stringify(teamData.board),
-      p_bosses: JSON.stringify(teamData.bosses),
-      p_active_boss_index: teamData.active_boss_index,
-      p_log: JSON.stringify(teamData.log),
-      p_history: JSON.stringify(teamData.history),
-      p_completed_positions: teamData.completed_positions,
-      p_exhausted_tasks: teamData.exhausted_tasks,
+    // Fetch latest server state and merge to avoid overwriting concurrent updates
+    const latest = await getTeam(teamId);
+    if (!latest) {
+      console.warn('saveTeamState: latest state not found, falling back to RPC with provided data');
+      const { data, error } = await supabase.rpc('save_team_state', {
+        p_team_id: teamId,
+        p_board: teamData.board,
+        p_bosses: teamData.bosses,
+        p_active_boss_index: teamData.active_boss_index,
+        p_log: teamData.log || [],
+        p_history: teamData.history || [],
+        p_completed_positions: teamData.completed_positions,
+        p_exhausted_tasks: teamData.exhausted_tasks,
+      });
+      if (error) {
+        console.error('saveTeamState RPC error (no latest):', error);
+        await saveTeamStateFallback(teamId, teamData);
+      } else {
+        console.log('saveTeamState result (no latest):', data);
+      }
+      return;
+    }
+
+    // Merge logs/history/exhausted
+    const mergedLog = [...(latest.log || []), ...(teamData.log || [])].slice(-100);
+    const mergedHistory = [...(latest.history || []), ...(teamData.history || [])].slice(-50);
+    const mergedExhausted = Array.from(new Set([...(latest.exhaustedTasks || []), ...(teamData.exhausted_tasks || [])]));
+
+    // Merge completed/replaced/lineCompleted - take OR to preserve others' progress
+    const mergedCompleted = Array.from({ length: 25 }, (_, i) => Boolean((latest.completedPositions || [])[i]) || Boolean((teamData.completed_positions || [])[i]));
+    const mergedReplaced = Array.from({ length: 25 }, (_, i) => Boolean((latest.replacedPositions || [])[i]) || Boolean((teamData.replaced_positions || [])[i]));
+    const mergedLineCompleted = Array.from({ length: 25 }, (_, i) => Boolean((latest.lineCompletedPositions || [])[i]) || Boolean((teamData.line_completed_positions || [])[i]));
+
+    // Merge bosses conservatively: prefer lower currentHp (preserve damage applied by others)
+    const mergedBosses = (latest.bosses || []).map((lb, idx) => {
+      const sb = (teamData.bosses || [])[idx] || {};
+      const lbHp = typeof lb.currentHp === 'number' ? lb.currentHp : Number(lb.currentHp || 0);
+      const sbHp = typeof sb.currentHp === 'number' ? sb.currentHp : Number(sb.currentHp || lbHp);
+      const currentHp = Math.min(lbHp, sbHp);
+      const defeated = Boolean(lb.defeated) || Boolean(sb.defeated) || currentHp <= 0;
+      return { ...lb, ...sb, currentHp, defeated };
     });
-    
+
+    // Merge board conservatively: for each tile, if either side marks it completed/flipped, preserve true
+    const mergedBoard = (latest.board || []).map((row, r) =>
+      (row || []).map((tile, c) => {
+        const idx = r * 5 + c;
+        const serverTile = tile || {};
+        const clientTile = (teamData.board && teamData.board[r] && teamData.board[r][c]) || {};
+        const completed = Boolean((latest.completedPositions || [])[idx]) || Boolean((teamData.completed_positions || [])[idx]) || Boolean(serverTile.completed) || Boolean(clientTile.completed);
+        const flipped = Boolean(serverTile.flipped) || Boolean(clientTile.flipped);
+        const pendingReplacement = clientTile.pendingReplacement || serverTile.pendingReplacement || null;
+        const damage = clientTile.damage ?? serverTile.damage;
+        const id = serverTile.id || clientTile.id;
+        const task = serverTile.task || clientTile.task;
+        return { ...serverTile, ...clientTile, id, task, damage, flipped, completed, pendingReplacement };
+      })
+    );
+
+    const payload = {
+      p_team_id: teamId,
+      p_board: mergedBoard,
+      p_bosses: mergedBosses,
+      p_active_boss_index: teamData.active_boss_index ?? latest.activeBossIndex,
+      p_log: mergedLog,
+      p_history: mergedHistory,
+      p_completed_positions: mergedCompleted,
+      p_exhausted_tasks: mergedExhausted,
+      p_replaced_positions: mergedReplaced,
+      p_line_completed_positions: mergedLineCompleted,
+    };
+
+    console.log('[saveTeamState] merged payload, calling RPC', payload);
+    const { data, error } = await supabase.rpc('save_team_state', payload);
     if (error) {
       console.error('saveTeamState RPC error:', error);
       await saveTeamStateFallback(teamId, teamData);

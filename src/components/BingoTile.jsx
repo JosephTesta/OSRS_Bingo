@@ -15,10 +15,13 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
   }, [tile.id, tile.isNew]);
 
   const isDone = tile.flipped || tile.completed;
-  const isPositionResolved = isCompletedPosition || isLineCompleted || isReplaced;
+  // Consider a position resolved when it's completed or a line is completed; replaced tiles
+  // should still be clickable (they are new tiles overwriting completed ones).
+  const isPositionResolved = isCompletedPosition || isLineCompleted;
   const showBack = isDone;
-  const clickable = !noClick && !isDone && !isPositionResolved;
-  const showOutline = isPositionResolved;
+  // Allow clicks on replaced tiles even if they were previously completed.
+  const clickable = !noClick && !isPositionResolved && (isReplaced ? true : !isDone);
+  const showOutline = isPositionResolved || isReplaced;
 
   return (
     <div
