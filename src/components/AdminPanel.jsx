@@ -342,7 +342,7 @@ export function AdminPanel({ onStart }) {
                 val: false,
                 set: () => {},
                 label: "Share Game",
-                desc: "Set a password to share this game with others (optional)",
+                desc: "Leave blank to let anyone with the link edit (optional password restricts editing)",
                 hasPassword: true,
               },
             ].map(item => (
@@ -355,7 +355,7 @@ export function AdminPanel({ onStart }) {
                       type="password"
                       value={adminPassword}
                       onChange={e => setAdminPassword(e.target.value)}
-                      placeholder="Set password to enable sharing"
+                      placeholder="Set password to restrict editing (optional)"
                       style={{ width: "100%" }}
                     />
                   </div>

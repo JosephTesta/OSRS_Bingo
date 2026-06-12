@@ -131,8 +131,6 @@ textarea{resize:vertical;}
 @keyframes undoFlash{0%{box-shadow:0 0 0 2px rgba(252,211,77,.8);}100%{box-shadow:none;}}
 `;
 
-const STORAGE_KEY = "osrs_bingo_v5";
-
 export default function App() {
   const [phase, setPhase] = useState("setup");
   const [gs, setGs] = useState(null);
@@ -140,6 +138,7 @@ export default function App() {
   const [searchParams] = useSearchParams();
   const gameId = searchParams.get("id");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [requiresAdmin, setRequiresAdmin] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -158,7 +157,7 @@ export default function App() {
   }, [gameId]);
 
   useEffect(() => {
-    if (gs && gameId) {
+    if (gs && gameId && requiresAdmin) {
       const storedAdmin = localStorage.getItem(`admin_${gameId}`);
       if (storedAdmin) {
         verifyAdminPassword(gameId, storedAdmin).then(result => {
@@ -170,7 +169,7 @@ export default function App() {
         });
       }
     }
-  }, [gs, gameId]);
+  }, [gs, gameId, requiresAdmin]);
 
   async function loadSharedGame() {
     try {
@@ -180,6 +179,10 @@ export default function App() {
         return;
       }
       
+      const requiresPassword = Boolean(game.admin_password_hash?.trim());
+      setRequiresAdmin(requiresPassword);
+      setIsAdmin(!requiresPassword);
+
       const teams = await getTeams(gameId);
       setGs({
         settings: game.settings,
@@ -189,11 +192,13 @@ export default function App() {
       });
       setPhase("game");
       
-      const storedAdmin = localStorage.getItem(`admin_${gameId}`);
-      if (storedAdmin) {
-        const isValid = await verifyAdminPassword(gameId, storedAdmin);
-        if (isValid) setIsAdmin(true);
-        else localStorage.removeItem(`admin_${gameId}`);
+      if (requiresPassword) {
+        const storedAdmin = localStorage.getItem(`admin_${gameId}`);
+        if (storedAdmin) {
+          const isValid = await verifyAdminPassword(gameId, storedAdmin);
+          if (isValid) setIsAdmin(true);
+          else localStorage.removeItem(`admin_${gameId}`);
+        }
       }
     } catch (err) {
       console.error("Failed to load game:", err);
@@ -234,6 +239,7 @@ export default function App() {
 
   async function handlePasswordSubmit(e) {
     e.preventDefault();
+    if (!requiresAdmin) return;
     const isValid = await verifyAdminPassword(gameId, passwordInput);
     if (isValid) {
       localStorage.setItem(`admin_${gameId}`, passwordInput);
@@ -273,47 +279,6 @@ export default function App() {
     }
   }, [phase, gameId, isAdmin]);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw || gameId) return;
-      const { phase: p, gs: g } = JSON.parse(raw);
-      if (p === "game" && g) {
-        const clean = {
-          ...g,
-          undoFlashTeamId: null,
-          teams: g.teams.map(t => ({
-            ...t,
-            damageFloats: [],
-            board: t.board.map(row => row.map(tile => ({ ...tile, isNew: false }))),
-          })),
-        };
-        setGs(clean);
-        setPhase("game");
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (phase === "game" && gs && !gameId) {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ phase, gs })); } catch {}
-    }
-  }, [phase, gs]);
-
-  function transformBack(team) {
-    return {
-      board: team.board,
-      exhausted_tasks: team.exhaustedTasks,
-      completed_positions: team.completedPositions,
-      line_completed_positions: team.lineCompletedPositions,
-      replaced_positions: team.replacedPositions,
-      bosses: team.bosses,
-      active_boss_index: team.activeBossIndex,
-      log: team.log,
-      history: team.history,
-    };
-  }
-
   const handleStart = useCallback(async ({ selectedBosses, teamNames, settings }) => {
     const tasks = settings.tasks;
     const dMin = settings.dMin;
@@ -321,6 +286,7 @@ export default function App() {
     const randomizeDamage = settings.randomizeDamage;
     const fixedDamage = settings.fixedDamage;
     const randomizeBoard = settings.randomizeBoard;
+    const adminPassword = settings.adminPassword?.trim() || "";
     
     const sharedBoard = makeBoard(tasks, dMin, dMax, randomizeDamage, fixedDamage, false);
     const teams = teamNames.map(name => {
@@ -343,39 +309,40 @@ export default function App() {
       };
     });
     
+    const cleanSettings = { ...settings, adminPassword };
     const newGs = {
       teams,
-      settings,
+      settings: cleanSettings,
       winner: null,
       undoFlashTeamId: null,
     };
     
-    if (settings.adminPassword) {
-      try {
-        const game = await createGame(settings, settings.adminPassword);
-        
-        for (const team of teams) {
-          await createTeam(game.id, {
-            name: team.name,
-            board: team.board,
-            exhausted_tasks: team.exhaustedTasks,
-            completed_positions: team.completedPositions,
-            line_completed_positions: team.lineCompletedPositions,
-            replaced_positions: team.replacedPositions,
-            bosses: team.bosses,
-            active_boss_index: team.activeBossIndex,
-            log: team.log,
-            history: team.history,
-          });
-        }
-        
-        window.history.replaceState(null, "", `?id=${game.id}`);
-        setIsAdmin(true);
-        localStorage.setItem(`admin_${game.id}`, settings.adminPassword);
-} catch (err) {
-        console.error("Failed to save to database:", err);
-        alert("Failed to save game to database. Game will work locally but won't be shareable.");
+    try {
+      const game = await createGame(cleanSettings, adminPassword);
+      
+      for (const team of teams) {
+        await createTeam(game.id, {
+          name: team.name,
+          board: team.board,
+          exhausted_tasks: team.exhaustedTasks,
+          completed_positions: team.completedPositions,
+          line_completed_positions: team.lineCompletedPositions,
+          replaced_positions: team.replacedPositions,
+          bosses: team.bosses,
+          active_boss_index: team.activeBossIndex,
+          log: team.log,
+          history: team.history,
+        });
       }
+      
+      window.history.replaceState(null, "", `?id=${game.id}`);
+      setIsAdmin(true);
+      setRequiresAdmin(Boolean(adminPassword));
+      if (adminPassword) localStorage.setItem(`admin_${game.id}`, adminPassword);
+    } catch (err) {
+      console.error("Failed to save to database:", err);
+      setRequiresAdmin(false);
+      alert("Failed to save game to database. Game will work locally but won't be shareable.");
     }
     
     setGs(newGs);
@@ -670,11 +637,12 @@ export default function App() {
       localStorage.removeItem(`admin_${gameId}`);
       window.history.replaceState(null, "", "/");
     } else {
-      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      try { localStorage.clear(); } catch {}
     }
     setGs(null);
     setPhase("setup");
     setIsAdmin(false);
+    setRequiresAdmin(false);
   }, [gameId]);
 
   const handleExport = useCallback(() => {
@@ -705,17 +673,20 @@ export default function App() {
         <>
           {gameId && (
             <div style={{ padding: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #3a2800" }}>
-              <a href="/" onClick={(e) => { e.preventDefault(); window.history.replaceState(null, "", "/"); setGs(null); setPhase("setup"); setIsAdmin(false); localStorage.removeItem(STORAGE_KEY); }} style={{ color: "#c8a951", textDecoration: "none", cursor: "pointer" }}>Create New Game</a>
-              {!isAdmin && (
+              <a href="/" onClick={(e) => { e.preventDefault(); window.history.replaceState(null, "", "/"); setGs(null); setPhase("setup"); setIsAdmin(false); setRequiresAdmin(false); }} style={{ color: "#c8a951", textDecoration: "none", cursor: "pointer" }}>Create New Game</a>
+              {requiresAdmin && !isAdmin && (
                 <button onClick={() => setShowPasswordPrompt(true)} className="btn btn-amber" style={{ fontSize: "10px", padding: "5px 10px" }}>
                   Admin Login
                 </button>
               )}
-              {isAdmin && (
+              {requiresAdmin && isAdmin && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ color: "#86efac", fontSize: "12px" }}>Admin Mode</span>
                   <button onClick={() => { setIsAdmin(false); localStorage.removeItem(`admin_${gameId}`); window.location.reload(); }} style={{ background: "none", border: "none", color: "#5a4020", cursor: "pointer", fontSize: 11 }}>Logout</button>
                 </div>
+              )}
+              {!requiresAdmin && isAdmin && (
+                <span style={{ color: "#86efac", fontSize: "12px" }}>Edit Mode</span>
               )}
             </div>
           )}
@@ -725,10 +696,11 @@ export default function App() {
             onReset={handleReset} 
             onExport={handleExport} 
             isAdmin={isAdmin}
+            requiresAdmin={requiresAdmin}
           />
         </>
       )}
-      {showPasswordPrompt && (
+      {showPasswordPrompt && requiresAdmin && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
           <form onSubmit={handlePasswordSubmit} style={{ background: "#1a0e00", padding: "40px", borderRadius: "8px", border: "1px solid #4a3010", position: "relative" }}>
             <button type="button" onClick={() => { setShowPasswordPrompt(false); setPasswordInput(""); setPasswordError(""); }} style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none", color: "#5a4020", fontSize: 20, cursor: "pointer" }}>×</button>
