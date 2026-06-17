@@ -491,9 +491,7 @@ export default function App() {
 
     if (action.type === "UNDO") {
       const { teamId } = action;
-      console.log('[undo] triggered for team', teamId, 'current gs:', gs ? { teams: gs.teams.map(t=>({id:t.id, historyLength: t.history.length})) } : null);
-
-      const { teamId } = action;
+      console.log('[undo] triggered for team', teamId, 'current gs:', gs ? { teams: gs.teams.map(t=>({id:t.id, historyLength: Array.isArray(t.history) ? t.history.length : typeof t.history === 'string' ? t.history.length : 0})) } : null);
 
       // Read current client state snapshot
       const clientGs = gs;
