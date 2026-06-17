@@ -559,6 +559,62 @@ export default function App() {
         })
       );
 
+      // Recompute line-completed positions from the restored board and the
+      // resolved/completed/replaced flags. This ensures undo removes outlines
+      // for lines that were completed by the tile being undone.
+      const recomputeLineCompleted = (board, completedArr, replacedArr) => {
+        const lines = Array(25).fill(false);
+        // rows
+        for (let r = 0; r < 5; r++) {
+          let ok = true;
+          for (let c = 0; c < 5; c++) {
+            const idx = r * 5 + c;
+            const t = board[r]?.[c];
+            const flipped = Boolean(t?.flipped);
+            if (!(flipped || Boolean(completedArr[idx]) || Boolean(replacedArr[idx]))) {
+              ok = false; break;
+            }
+          }
+          if (ok) for (let c = 0; c < 5; c++) lines[r * 5 + c] = true;
+        }
+        // cols
+        for (let c = 0; c < 5; c++) {
+          let ok = true;
+          for (let r = 0; r < 5; r++) {
+            const idx = r * 5 + c;
+            const t = board[r]?.[c];
+            const flipped = Boolean(t?.flipped);
+            if (!(flipped || Boolean(completedArr[idx]) || Boolean(replacedArr[idx]))) {
+              ok = false; break;
+            }
+          }
+          if (ok) for (let r = 0; r < 5; r++) lines[r * 5 + c] = true;
+        }
+        // diag 1
+        let ok1 = true;
+        for (let i = 0; i < 5; i++) {
+          const idx = i * 5 + i;
+          const t = board[i]?.[i];
+          const flipped = Boolean(t?.flipped);
+          if (!(flipped || Boolean(completedArr[idx]) || Boolean(replacedArr[idx]))) { ok1 = false; break; }
+        }
+        if (ok1) for (let i = 0; i < 5; i++) lines[i * 5 + i] = true;
+        // diag 2
+        let ok2 = true;
+        for (let i = 0; i < 5; i++) {
+          const idx = i * 5 + (4 - i);
+          const t = board[i]?.[4 - i];
+          const flipped = Boolean(t?.flipped);
+          if (!(flipped || Boolean(completedArr[idx]) || Boolean(replacedArr[idx]))) { ok2 = false; break; }
+        }
+        if (ok2) for (let i = 0; i < 5; i++) lines[i * 5 + (4 - i)] = true;
+        return lines;
+      };
+
+      const recomputedLinePositions = recomputeLineCompleted(revealedBoard, resolvedPositions, resolvedReplaced);
+      const serverLine = serverLatest?.lineCompletedPositions || Array(25).fill(false);
+      const finalLinePositions = recomputedLinePositions.map((v, i) => Boolean(v) || Boolean(serverLine[i]));
+
       const damagedBossIdx = snapshot.activeBossIndex;
       const currentTeamBossHp = team.bosses[damagedBossIdx]?.currentHp ?? 0;
       const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? currentTeamBossHp;
@@ -629,7 +685,7 @@ export default function App() {
         exhaustedTasks:         snapshot.exhaustedTasks,
         completedPositions:     resolvedPositions,
         replacedPositions:      resolvedReplaced,
-        lineCompletedPositions: snapshot.lineCompletedPositions,
+        lineCompletedPositions: finalLinePositions,
         log:                    [...baseLog, restoreLogEntry],
         damageFloats:           [],
         history,
