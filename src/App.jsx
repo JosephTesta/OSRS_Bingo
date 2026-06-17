@@ -476,19 +476,29 @@ export default function App() {
 
     if (action.type === "UNDO") {
       const { teamId } = action;
+      console.log('[undo] triggered for team', teamId, 'current gs:', gs ? { teams: gs.teams.map(t=>({id:t.id, historyLength: t.history.length})) } : null);
+
+      const { teamId } = action;
 
       // Read current client state snapshot
       const clientGs = gs;
-      if (!clientGs) return;
+      if (!clientGs) {
+        console.warn('[undo] gs not available, aborting');
+        return;
+      }
       const team = clientGs.teams.find(t => t.id === teamId);
-      if (!team || team.history.length === 0) {
-        console.warn('[undo] no history available for team', teamId);
+      if (!team) {
+        console.warn('[undo] team not found in gs', teamId);
+        return;
+      }
+      if (!Array.isArray(team.history) || team.history.length === 0) {
+        console.warn('[undo] no history available for team', teamId, 'historyLength:', team.history ? team.history.length : 0);
         return;
       }
 
       const history = [...team.history];
       const snapshot = history.pop();
-      console.log('[undo] preparing to restore snapshot for team', teamId, 'from history depth:', history.length);
+      console.log('[undo] preparing to restore snapshot for team', teamId, 'from history depth:', history.length, 'snapshotKeys:', snapshot ? Object.keys(snapshot) : null);
 
       // Fetch latest server state to avoid overwriting other players' progress
       let serverLatest = null;
@@ -896,7 +906,7 @@ export default function App() {
         return newGs;
       });
     }
-  }, [isAdmin, gameId]);
+  }, [isAdmin, gameId, gs]);
 
   const handleReset = useCallback(() => {
     Object.values(timers.current).forEach(clearTimeout);
