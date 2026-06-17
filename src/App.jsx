@@ -615,6 +615,15 @@ export default function App() {
       const serverLine = serverLatest?.lineCompletedPositions || Array(25).fill(false);
       const finalLinePositions = recomputedLinePositions.map((v, i) => Boolean(v) || Boolean(serverLine[i]));
 
+      console.log('[undo] recompute line positions', {
+        teamId,
+        resolvedPositionsSample: resolvedPositions.slice(0, 25).map((v,i)=>({i,v})),
+        resolvedReplacedSample: resolvedReplaced.slice(0,25).map((v,i)=>({i,v})),
+        recomputedLinePositions,
+        serverLine,
+        finalLinePositions,
+      });
+
       const damagedBossIdx = snapshot.activeBossIndex;
       const currentTeamBossHp = team.bosses[damagedBossIdx]?.currentHp ?? 0;
       const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? currentTeamBossHp;
