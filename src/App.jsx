@@ -653,8 +653,17 @@ export default function App() {
           alert(`Tile not found locally at row ${r}, col ${c}.`);
           return g;
         }
-        if (team.completedPositions?.[tileIndex] || team.replacedPositions?.[tileIndex]) {
+        // If the position is marked completed, block clicks.
+        // If the position is marked replaced, allow clicks only when the
+        // current tile at this position is a fresh replacement (not flipped/completed).
+        if (team.completedPositions?.[tileIndex]) {
           return g;
+        }
+        if (team.replacedPositions?.[tileIndex]) {
+          const currentTile = team.board[r][c];
+          if (!currentTile) return g;
+          if (currentTile.flipped || currentTile.completed) return g;
+          // otherwise allow clicking the replaced/new tile
         }
         if (tile.flipped || tile.completed) return g;
         const boss = team.bosses[team.activeBossIndex];
