@@ -4,8 +4,9 @@ import { DamageLog } from "./DamageLog";
 
 export function TeamCard({ team, onTileComplete, onSetActiveBoss, onUndo, disabled, undoFlash }) {
   const done = team.board.flat().filter(t => t.completed || t.flipped).length;
-  const canUndo = team.history.length > 0 && !disabled;
+  const canUndo = Array.isArray(team.history) && team.history.length > 0 && !disabled;
   const allDone = team.bosses.every(b => b.defeated);
+  console.log('[TeamCard] render', { teamId: team.id, historyLength: team.history?.length, disabled, canUndo });
 
   return (
     <div
@@ -38,7 +39,10 @@ export function TeamCard({ team, onTileComplete, onSetActiveBoss, onUndo, disabl
             style={{ fontSize: 9, padding: "3px 9px" }}
             disabled={!canUndo}
             title={canUndo ? `Undo last tile (${team.history.length} available)` : "Nothing to undo"}
-            onClick={() => onUndo(team.id)}
+            onClick={() => {
+              console.log('[TeamCard] undo click', { teamId: team.id, historyLength: team.history?.length, disabled, canUndo });
+              onUndo(team.id);
+            }}
           >
             ↩ Undo{team.history.length > 0 ? ` (${team.history.length})` : ""}
           </button>

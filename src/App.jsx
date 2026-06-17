@@ -270,7 +270,14 @@ export default function App() {
       history: Array.isArray(team.history)
         ? team.history
         : typeof team.history === 'string'
-        ? JSON.parse(team.history)
+        ? (() => {
+            try {
+              return JSON.parse(team.history);
+            } catch (err) {
+              console.warn('[transformTeam] failed to parse history string', err, team.history);
+              return [];
+            }
+          })()
         : [],
       damageFloats: [],
     };
