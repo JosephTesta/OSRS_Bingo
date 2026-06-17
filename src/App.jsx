@@ -61,6 +61,7 @@ const snapshotTeam = (t, g) => ({
   completedPositions:     [...(t.completedPositions || Array(25).fill(false))],
   lineCompletedPositions: [...(t.lineCompletedPositions || Array(25).fill(false))],
   replacedPositions:      [...(t.replacedPositions || Array(25).fill(false))],
+  log:                   [...(t.log || [])],
 });
 
 const CSS = `
@@ -558,21 +559,23 @@ export default function App() {
         })
       );
 
-      // Merge bosses conservatively: don't increase HP above server latest
+      const damagedBossIdx = snapshot.activeBossIndex;
+      const currentTeamBossHp = team.bosses[damagedBossIdx]?.currentHp ?? 0;
+      const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? currentTeamBossHp;
+      const hasExternalDamage = serverLatest && serverBossHp < currentTeamBossHp;
+      const snapBossHp = snapshot.bosses[damagedBossIdx]?.currentHp;
+      const dmg_restored = !hasExternalDamage && snapBossHp != null ? Math.max(0, snapBossHp - currentTeamBossHp) : 0;
+
+      // Merge bosses conservatively: restore snapshot HP unless there is newer
+      // external damage on the server, in which case preserve the lower server HP.
       const mergedBosses = (snapshot.bosses || []).map((sb, idx) => {
         const srv = serverLatest && serverLatest.bosses && serverLatest.bosses[idx] ? serverLatest.bosses[idx] : null;
         const srvHp = srv ? Number(srv.currentHp || 0) : null;
         const snapHp = Number(sb.currentHp || 0);
-        const currentHp = srvHp === null ? snapHp : Math.min(srvHp, snapHp);
+        const currentHp = (srvHp !== null && srvHp < currentTeamBossHp) ? srvHp : snapHp;
         const defeated = Boolean(sb.defeated) || (srv ? Boolean(srv.defeated) : false) || currentHp <= 0;
         return { ...sb, currentHp, defeated };
       });
-
-      // Compute restore log entry only if we're actually restoring any HP locally
-      const damagedBossIdx = snapshot.activeBossIndex;
-      const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? team.bosses[damagedBossIdx]?.currentHp;
-      const snapBossHp = snapshot.bosses[damagedBossIdx]?.currentHp;
-      const dmg_restored = snapBossHp && serverBossHp != null ? Math.max(0, snapBossHp - serverBossHp) : 0;
 
       const restoreLogEntry = {
         id: uid(),
@@ -592,7 +595,7 @@ export default function App() {
         completedPositions:     resolvedPositions,
         replacedPositions:      resolvedReplaced,
         lineCompletedPositions: snapshot.lineCompletedPositions,
-        log:                    [...team.log, restoreLogEntry],
+        log:                    [...snapshot.log, restoreLogEntry],
         damageFloats:           [],
         history,
       };
