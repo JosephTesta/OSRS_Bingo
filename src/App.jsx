@@ -354,38 +354,49 @@ export default function App() {
         console.error('[realtime] channel.subscribe() threw:', e);
       }
 
-      // Fallback listener using supabase.from()
+      // Fallback listener using legacy supabase.from().on().subscribe (only if supported)
       let fromSub = null;
       try {
-        fromSub = supabase.from(`game_actions:game_id=eq.${gameId}`).on('INSERT', payload => {
-          console.log('[realtime] from() payload received:', payload);
-          const action = payload.new;
-          const clientActionId = action?.payload?.client_action_id;
-          if (clientActionId && localActionIds.current.has(clientActionId)) {
-            localActionIds.current.delete(clientActionId);
-            return;
-          }
-          const remoteTeam = action?.payload?.team ? transformTeam(action.payload.team) : null;
-          if (!remoteTeam) return;
-          setGs(prev => {
-            if (!prev) return prev;
-            const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
-            if (idx === -1) return prev;
-            const existing = prev.teams[idx];
-            const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
-            const teams = [...prev.teams];
-            teams[idx] = { ...remoteTeam, history, damageFloats: [] };
-            return { ...prev, teams };
-          });
-        }).subscribe();
-        console.log('[realtime] from() subscription created', fromSub);
+        const maybeFrom = typeof supabase.from === 'function'
+          ? supabase.from(`game_actions:game_id=eq.${gameId}`)
+          : null;
+        if (maybeFrom && typeof maybeFrom.on === 'function' && typeof maybeFrom.subscribe === 'function') {
+          fromSub = maybeFrom.on('INSERT', payload => {
+            console.log('[realtime] from() payload received:', payload);
+            const action = payload.new;
+            const clientActionId = action?.payload?.client_action_id;
+            if (clientActionId && localActionIds.current.has(clientActionId)) {
+              localActionIds.current.delete(clientActionId);
+              return;
+            }
+            const remoteTeam = action?.payload?.team ? transformTeam(action.payload.team) : null;
+            if (!remoteTeam) return;
+            setGs(prev => {
+              if (!prev) return prev;
+              const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
+              if (idx === -1) return prev;
+              const existing = prev.teams[idx];
+              const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
+              const teams = [...prev.teams];
+              teams[idx] = { ...remoteTeam, history, damageFloats: [] };
+              return { ...prev, teams };
+            });
+          }).subscribe();
+          console.log('[realtime] from() subscription created', fromSub);
+        } else {
+          console.log('[realtime] legacy supabase.from().on().subscribe not supported by this client; skipping fallback');
+        }
       } catch (e) {
         console.error('[realtime] supabase.from() subscribe threw:', e);
       }
 
       return () => {
         try { supabase.removeChannel(channel); } catch (e) { console.warn('removeChannel failed', e); }
-        try { if (fromSub) supabase.removeSubscription(fromSub); } catch (e) { /* ignore */ }
+        try {
+          if (fromSub && typeof fromSub.unsubscribe === 'function') {
+            fromSub.unsubscribe();
+          }
+        } catch (e) { /* ignore */ }
       };
     }
   }, [phase, gameId, isAdmin]);
