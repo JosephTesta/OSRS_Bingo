@@ -585,6 +585,41 @@ export default function App() {
         task: '',
         type: 'restore',
       };
+      // Reconstruct or derive the log for the restored state.
+      // Prefer the snapshot's log if present. If missing (older snapshots),
+      // attempt to remove the most recent damage entries that correspond to
+      // tiles that were resolved after the snapshot.
+      const snapLog = Array.isArray(snapshot.log) ? snapshot.log : null;
+      let baseLog = [];
+      if (snapLog) {
+        baseLog = [...snapLog];
+      } else {
+        // Count how many tiles are resolved now that weren't in the snapshot
+        const currCompleted = team.completedPositions || Array(25).fill(false);
+        const currReplaced = team.replacedPositions || Array(25).fill(false);
+        const snapCompleted = snapshot.completedPositions || Array(25).fill(false);
+        const snapReplaced = snapshot.replacedPositions || Array(25).fill(false);
+        let changeCount = 0;
+        for (let i = 0; i < 25; i++) {
+          const nowResolved = Boolean(currCompleted[i] || currReplaced[i]);
+          const wasResolved = Boolean(snapCompleted[i] || snapReplaced[i]);
+          if (nowResolved && !wasResolved) changeCount++;
+        }
+
+        // Remove up to `changeCount` trailing damage log entries from current log
+        const rev = [...(team.log || [])].slice().reverse();
+        const kept = [];
+        let removed = 0;
+        for (const entry of rev) {
+          if (removed < changeCount && entry && entry.type === 'damage') {
+            removed++;
+            continue;
+          }
+          kept.push(entry);
+        }
+        baseLog = kept.reverse();
+        console.log('[undo] reconstructed log from team.log', { removed, changeCount, before: (team.log || []).length, after: baseLog.length });
+      }
 
       const updatedTeam = {
         ...team,
@@ -595,7 +630,7 @@ export default function App() {
         completedPositions:     resolvedPositions,
         replacedPositions:      resolvedReplaced,
         lineCompletedPositions: snapshot.lineCompletedPositions,
-        log:                    [...snapshot.log, restoreLogEntry],
+        log:                    [...baseLog, restoreLogEntry],
         damageFloats:           [],
         history,
       };
