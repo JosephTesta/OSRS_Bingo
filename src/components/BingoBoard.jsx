@@ -9,17 +9,25 @@ export function BingoBoard({ board, onTileComplete, disabled, completedPositions
         Array.isArray(row)
           ? row.map((tile, c) =>
               tile ? (
-                <BingoTile
-                  key={`${r}-${c}-${tile.id}`}
-                  tile={tile}
-                  r={r}
-                  c={c}
-                  onComplete={onTileComplete}
-                  noClick={disabled || tile.flipped || tile.completed}
-                  isCompletedPosition={completedPositions && completedPositions[r * 5 + c]}
-                  isLineCompleted={lineCompletedPositions && lineCompletedPositions[r * 5 + c]}
-                  isReplaced={replacedPositions && replacedPositions[r * 5 + c]}
-                />
+                (() => {
+                  const isReplacedFlag = replacedPositions && replacedPositions[r * 5 + c];
+                  const isCompletedPos = completedPositions && completedPositions[r * 5 + c];
+                  const isLineComp = lineCompletedPositions && lineCompletedPositions[r * 5 + c];
+                  const noClickFlag = disabled || (!isReplacedFlag && (tile.flipped || tile.completed));
+                  return (
+                    <BingoTile
+                      key={`${r}-${c}-${tile.id}`}
+                      tile={tile}
+                      r={r}
+                      c={c}
+                      onComplete={onTileComplete}
+                      noClick={noClickFlag}
+                      isCompletedPosition={isCompletedPos}
+                      isLineCompleted={isLineComp}
+                      isReplaced={isReplacedFlag}
+                    />
+                  );
+                })()
               ) : (
                 <div key={`${r}-${c}-empty`} />
               )
