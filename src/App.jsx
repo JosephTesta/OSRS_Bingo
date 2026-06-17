@@ -267,7 +267,11 @@ export default function App() {
       bosses: team.bosses,
       activeBossIndex: team.active_boss_index || 0,
       log: team.log || [],
-      history: team.history || [],
+      history: Array.isArray(team.history)
+        ? team.history
+        : typeof team.history === 'string'
+        ? JSON.parse(team.history)
+        : [],
       damageFloats: [],
     };
   }
@@ -326,8 +330,10 @@ export default function App() {
           if (!prev) return prev;
           const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
           if (idx === -1) return prev;
+          const existing = prev.teams[idx];
+          const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
           const teams = [...prev.teams];
-          teams[idx] = { ...remoteTeam, damageFloats: [] };
+          teams[idx] = { ...remoteTeam, history, damageFloats: [] };
           return { ...prev, teams };
         });
       });
@@ -357,8 +363,10 @@ export default function App() {
             if (!prev) return prev;
             const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
             if (idx === -1) return prev;
+            const existing = prev.teams[idx];
+            const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
             const teams = [...prev.teams];
-            teams[idx] = { ...remoteTeam, damageFloats: [] };
+            teams[idx] = { ...remoteTeam, history, damageFloats: [] };
             return { ...prev, teams };
           });
         }).subscribe();
