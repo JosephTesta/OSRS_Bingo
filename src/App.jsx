@@ -652,16 +652,12 @@ export default function App() {
         return lines;
       };
 
-      const recomputedLinePositions = recomputeLineCompleted(revealedBoard, resolvedPositions, resolvedReplaced);
-      const serverLine = serverLatest?.lineCompletedPositions || Array(25).fill(false);
-      const finalLinePositions = recomputedLinePositions.map((v, i) => Boolean(v) || Boolean(serverLine[i]));
+      const finalLinePositions = recomputeLineCompleted(revealedBoard, resolvedPositions, resolvedReplaced);
 
       console.log('[undo] recompute line positions', {
         teamId,
         resolvedPositionsSample: resolvedPositions.slice(0, 25).map((v,i)=>({i,v})),
         resolvedReplacedSample: resolvedReplaced.slice(0,25).map((v,i)=>({i,v})),
-        recomputedLinePositions,
-        serverLine,
         finalLinePositions,
       });
 
