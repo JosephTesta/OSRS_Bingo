@@ -14,7 +14,7 @@ export function BingoBoard({ board, onTileComplete, disabled, completedPositions
                   const isReplacedFlag = replacedPositions && replacedPositions[r * 5 + c];
                   const isCompletedPos = completedPositions && completedPositions[r * 5 + c];
                   const isLineComp = lineCompletedPositions && lineCompletedPositions[r * 5 + c];
-                  const noClickFlag = disabled || (!isReplacedFlag && (tile.flipped || tile.completed));
+                  const noClickFlag = disabled || (tile.flipped || tile.completed);
                   const isFlashing = flashSet.has(r * 5 + c);
                   return (
                     <BingoTile
