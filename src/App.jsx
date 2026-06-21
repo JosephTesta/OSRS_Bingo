@@ -545,21 +545,18 @@ export default function App() {
         const snapCompleted = snapshot.completedPositions || Array(25).fill(false);
         const snapReplaced = snapshot.replacedPositions || Array(25).fill(false);
 
-        // If server has a completion that's NOT in snapshot AND NOT in current
-        // team state, another session modified the board since our last sync.
+        // Treat completed + replaced as a combined "occupied" state — a position
+        // is done if either is true. This avoids false positives when the server
+        // sets completedPositions=false for replacement tiles while the client
+        // still has it true (before the flip timer fires).
         for (let i = 0; i < 25; i++) {
-          if (serverCompleted[i] && !snapCompleted[i] && !teamCompleted[i]) {
+          const serverOccupied = serverCompleted[i] || serverReplaced[i];
+          const snapOccupied = snapCompleted[i] || snapReplaced[i];
+          const teamOccupied = teamCompleted[i] || teamReplaced[i];
+          if (serverOccupied && !snapOccupied && !teamOccupied) {
             stale = true; break;
           }
-          if (serverReplaced[i] && !snapReplaced[i] && !teamReplaced[i]) {
-            stale = true; break;
-          }
-          // Also detect if the server lost a completion we still have (another
-          // session's undo that we haven't received via realtime yet).
-          if (!serverCompleted[i] && snapCompleted[i] && teamCompleted[i]) {
-            stale = true; break;
-          }
-          if (!serverReplaced[i] && snapReplaced[i] && teamReplaced[i]) {
+          if (!serverOccupied && snapOccupied && teamOccupied) {
             stale = true; break;
           }
         }
