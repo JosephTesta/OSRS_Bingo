@@ -667,18 +667,21 @@ export default function App() {
 
       const damagedBossIdx = snapshot.activeBossIndex;
       const currentTeamBossHp = team.bosses[damagedBossIdx]?.currentHp ?? 0;
-      const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? currentTeamBossHp;
-      const hasExternalDamage = serverLatest && serverBossHp < currentTeamBossHp;
       const snapBossHp = snapshot.bosses[damagedBossIdx]?.currentHp;
+      const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? currentTeamBossHp;
+      const hasExternalDamage = serverLatest && snapBossHp != null && serverBossHp < snapBossHp;
       const dmg_restored = !hasExternalDamage && snapBossHp != null ? Math.max(0, snapBossHp - currentTeamBossHp) : 0;
 
-      // Merge bosses conservatively: restore snapshot HP unless there is newer
-      // external damage on the server, in which case preserve the lower server HP.
+      // Merge bosses: restore the damaged boss to its pre-click snapHp so undo
+      // actually reverts the health cost. Other bosses prefer the lower HP
+      // (preserve damage applied by other sessions).
       const mergedBosses = (snapshot.bosses || []).map((sb, idx) => {
         const srv = serverLatest && serverLatest.bosses && serverLatest.bosses[idx] ? serverLatest.bosses[idx] : null;
         const srvHp = srv ? Number(srv.currentHp || 0) : null;
         const snapHp = Number(sb.currentHp || 0);
-        const currentHp = (srvHp !== null && srvHp < snapHp) ? srvHp : snapHp;
+        const currentHp = idx === damagedBossIdx
+          ? snapHp
+          : (srvHp !== null && srvHp < snapHp) ? srvHp : snapHp;
         const defeated = Boolean(sb.defeated) || (srv ? Boolean(srv.defeated) : false) || currentHp <= 0;
         return { ...sb, currentHp, defeated };
       });
@@ -751,6 +754,7 @@ export default function App() {
         if (!g || g.winner) return g;
         let team = g.teams.find(t => t.id === teamId);
         // If we have a server state, merge completed/replaced/board/bosses conservatively
+        const preMergeCompleted = [...(team.completedPositions || Array(25).fill(false))];
         if (serverLatest && team && serverLatest.id === teamId) {
           try {
             const serverCompleted = serverLatest.completedPositions || Array(25).fill(false);
@@ -771,7 +775,7 @@ export default function App() {
               return { ...b, ...sb, currentHp, defeated };
             });
 
-            team = { ...team, board: serverBoard, bosses: mergedBosses, completedPositions: mergedCompleted, replacedPositions: mergedReplaced };
+            team = { ...team, board: serverBoard, bosses: mergedBosses, completedPositions: mergedCompleted, replacedPositions: mergedReplaced, activeBossIndex: serverLatest.activeBossIndex ?? team.activeBossIndex };
           } catch (e) {
             console.error('[tile-click] error merging server state:', e);
           }
@@ -797,6 +801,12 @@ export default function App() {
           return g;
         }
         if (team.completedPositions?.[tileIndex]) {
+          if (serverLatest && !preMergeCompleted[tileIndex] && serverLatest.completedPositions?.[tileIndex]) {
+            console.warn('[tile-click] position completed by another session, reloading', { teamId, r, c, tileIndex });
+            alert('This tile was already completed by another player. Reloading...');
+            loadSharedGame();
+            return g;
+          }
           console.warn('[tile-click] position already completed, blocking click', { teamId, r, c, tileIndex });
           return g;
         }

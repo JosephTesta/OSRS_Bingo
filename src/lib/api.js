@@ -145,12 +145,24 @@ export async function getTeam(teamId) {
     
   if (error) throw error;
   if (!team) return null;
+
+  const normalizeBoolArray = (value) => {
+    const fallback = Array(25).fill(false);
+    if (!Array.isArray(value)) return fallback;
+    return Array.from({ length: 25 }, (_, i) => Boolean(value[i]));
+  };
+
   return {
     ...team,
     board: typeof team.board === 'string' ? JSON.parse(team.board) : team.board,
     bosses: typeof team.bosses === 'string' ? JSON.parse(team.bosses) : team.bosses,
     log: typeof team.log === 'string' ? JSON.parse(team.log) : (team.log || []),
     history: typeof team.history === 'string' ? JSON.parse(team.history) : (team.history || []),
+    completedPositions: normalizeBoolArray(team.completed_positions),
+    replacedPositions: normalizeBoolArray(team.replaced_positions),
+    lineCompletedPositions: normalizeBoolArray(team.line_completed_positions),
+    exhaustedTasks: team.exhausted_tasks || [],
+    activeBossIndex: team.active_boss_index ?? 0,
   };
 }
 
