@@ -904,8 +904,14 @@ export default function App() {
             loadSharedGame();
             return g;
           }
-          console.warn('[tile-click] position already completed, blocking click', { teamId, r, c, tileIndex });
-          return g;
+          // If the server says this tile is free (another session undid it),
+          // allow the click even though our merged state still shows it.
+          if (serverLatest && !serverLatest.completedPositions?.[tileIndex] && !serverLatest.replacedPositions?.[tileIndex]) {
+            console.log('[tile-click] tile was undone by another session, allowing click', { teamId, r, c, tileIndex });
+          } else {
+            console.warn('[tile-click] position already completed, blocking click', { teamId, r, c, tileIndex });
+            return g;
+          }
         }
         if (team.replacedPositions?.[tileIndex]) {
           if (serverLatest && !preMergeReplaced[tileIndex] && serverLatest.replacedPositions?.[tileIndex]) {
@@ -1082,6 +1088,21 @@ export default function App() {
               localActionIds.current.delete(clientActionId);
               loadSharedGame();
               alert(`Could not apply this tile action: ${result.reason || 'unknown reason'}`);
+            } else if (result?.applied === true && result?.team) {
+              // Server applied the action — reconcile optimistic state with the
+              // authoritative server response so the originating tab doesn't keep
+              // stale state (e.g. old tiles from before another session undid them).
+              localActionIds.current.delete(clientActionId);
+              setGs(prev => {
+                if (!prev) return prev;
+                const teams = [...prev.teams];
+                const idx = teams.findIndex(t => t.id === teamId);
+                if (idx !== -1) {
+                  const serverTeam = transformTeam(result.team);
+                  teams[idx] = { ...serverTeam, damageFloats: teams[idx].damageFloats || [] };
+                }
+                return { ...prev, teams };
+              });
             }
           }).catch(err => {
             localActionIds.current.delete(clientActionId);
