@@ -669,7 +669,7 @@ export default function App() {
       const currentTeamBossHp = team.bosses[damagedBossIdx]?.currentHp ?? 0;
       const snapBossHp = snapshot.bosses[damagedBossIdx]?.currentHp;
       const serverBossHp = serverLatest?.bosses?.[damagedBossIdx]?.currentHp ?? currentTeamBossHp;
-      const hasExternalDamage = serverLatest && snapBossHp != null && serverBossHp < snapBossHp;
+      const hasExternalDamage = serverLatest && snapBossHp != null && serverBossHp < currentTeamBossHp;
       const dmg_restored = !hasExternalDamage && snapBossHp != null ? Math.max(0, snapBossHp - currentTeamBossHp) : 0;
 
       // Merge bosses: restore the damaged boss to its pre-click snapHp so undo
@@ -755,6 +755,7 @@ export default function App() {
         let team = g.teams.find(t => t.id === teamId);
         // If we have a server state, merge completed/replaced/board/bosses conservatively
         const preMergeCompleted = [...(team.completedPositions || Array(25).fill(false))];
+        const preMergeReplaced = [...(team.replacedPositions || Array(25).fill(false))];
         if (serverLatest && team && serverLatest.id === teamId) {
           try {
             const serverCompleted = serverLatest.completedPositions || Array(25).fill(false);
@@ -811,6 +812,12 @@ export default function App() {
           return g;
         }
         if (team.replacedPositions?.[tileIndex]) {
+          if (serverLatest && !preMergeReplaced[tileIndex] && serverLatest.replacedPositions?.[tileIndex]) {
+            console.warn('[tile-click] position replaced by another session, reloading', { teamId, r, c, tileIndex });
+            alert('This tile was already completed by another player. Reloading...');
+            loadSharedGame();
+            return g;
+          }
           const currentTile = team.board[r][c];
           if (!currentTile) {
             console.warn('[tile-click] replaced position has no current tile', { teamId, r, c, tileIndex });
