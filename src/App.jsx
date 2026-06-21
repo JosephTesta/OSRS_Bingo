@@ -503,7 +503,15 @@ export default function App() {
 
     if (action.type === "UNDO") {
       const { teamId } = action;
-      console.log('[undo] triggered for team', teamId, 'current gs:', gs ? { teams: gs.teams.map(t=>({id:t.id, historyLength: Array.isArray(t.history) ? t.history.length : typeof t.history === 'string' ? t.history.length : 0})) } : null);
+      const foundTeam = gs?.teams?.find(t => t.id === teamId);
+      console.log('[undo] triggered for team', teamId, {
+        gsPresent: !!gs,
+        teamFound: !!foundTeam,
+        teamKeys: foundTeam ? Object.keys(foundTeam) : null,
+        completedInTeam: foundTeam ? 'completedPositions' in foundTeam : null,
+        replacedInTeam: foundTeam ? 'replacedPositions' in foundTeam : null,
+        historyLen: foundTeam && Array.isArray(foundTeam.history) ? foundTeam.history.length : 0,
+      });
 
       // Read current client state snapshot
       const clientGs = gs;
@@ -540,10 +548,27 @@ export default function App() {
       // team state, another session made changes we haven't synced. Abort undo.
       if (gameId && serverLatest) {
         let stale = false;
+        let staleReason = '';
         const teamCompleted = team.completedPositions || Array(25).fill(false);
         const teamReplaced = team.replacedPositions || Array(25).fill(false);
         const snapCompleted = snapshot.completedPositions || Array(25).fill(false);
         const snapReplaced = snapshot.replacedPositions || Array(25).fill(false);
+
+        console.log('[undo] stale check inputs', {
+          serverCompleted: serverCompleted.map((v,i)=>v?i:-1).filter(v=>v>=0),
+          serverReplaced: serverReplaced.map((v,i)=>v?i:-1).filter(v=>v>=0),
+          snapCompleted: snapCompleted.map((v,i)=>v?i:-1).filter(v=>v>=0),
+          snapReplaced: snapReplaced.map((v,i)=>v?i:-1).filter(v=>v>=0),
+          teamCompletedKeys: Object.keys(team).filter(k=>k.includes('ompleted')||k.includes('eplaced')),
+          teamCompleted: teamCompleted.map((v,i)=>v?i:-1).filter(v=>v>=0),
+          teamReplaced: teamReplaced.map((v,i)=>v?i:-1).filter(v=>v>=0),
+          serverLatestKeys: Object.keys(serverLatest).filter(k=>k.includes('ompleted')||k.includes('eplaced')),
+          teamId,
+          hasTeamCompleted: 'completedPositions' in team,
+          hasTeamReplaced: 'replacedPositions' in team,
+          serverHasCompleted: 'completedPositions' in serverLatest,
+          serverHasReplaced: 'replacedPositions' in serverLatest,
+        });
 
         // Treat completed + replaced as a combined "occupied" state — a position
         // is done if either is true. This avoids false positives when the server
@@ -554,18 +579,32 @@ export default function App() {
           const snapOccupied = snapCompleted[i] || snapReplaced[i];
           const teamOccupied = teamCompleted[i] || teamReplaced[i];
           if (serverOccupied && !snapOccupied && !teamOccupied) {
-            stale = true; break;
+            stale = true;
+            staleReason = `pos ${i}: serverOccupied=${serverOccupied} snapOccupied=${snapOccupied} teamOccupied=${teamOccupied} (server has more than both)`;
+            break;
           }
           if (!serverOccupied && snapOccupied && teamOccupied) {
-            stale = true; break;
+            stale = true;
+            staleReason = `pos ${i}: serverOccupied=${serverOccupied} snapOccupied=${snapOccupied} teamOccupied=${teamOccupied} (server missing what both have)`;
+            break;
           }
         }
 
         if (stale) {
-          console.warn('[undo] concurrent modification detected, reloading game state');
+          console.warn('[undo] concurrent modification detected', staleReason, {
+            staleReason,
+            serverCompleted,
+            serverReplaced,
+            snapCompleted,
+            snapReplaced,
+            teamCompleted,
+            teamReplaced,
+          });
           alert('The game state has changed in another session. Reloading latest state. Please try the undo again.');
           loadSharedGame();
           return;
+        } else {
+          console.log('[undo] stale check passed (not stale)');
         }
       }
 
