@@ -151,6 +151,9 @@ textarea{resize:vertical;}
 export default function App() {
   const [phase, setPhase] = useState("setup");
   const [gs, setGs] = useState(null);
+  const gsRef = useRef(null);
+  useEffect(() => { gsRef.current = gs; }, [gs]);
+  const processingRef = useRef(false);
   const timers = useRef({});
   const localActionIds = useRef(new Set());
   const [searchParams] = useSearchParams();
@@ -574,7 +577,8 @@ export default function App() {
   const dispatch = useCallback(async action => {
     const canEdit = !gameId || isAdmin;
     if (!canEdit) return;
-    
+
+    // SET_ACTIVE_BOSS is synchronous and fast — no lock needed.
     if (action.type === "SET_ACTIVE_BOSS") {
       const { teamId, bossId } = action;
       setGs(g => {
@@ -586,22 +590,31 @@ export default function App() {
         });
         return { ...g, teams };
       });
+      return;
     }
 
     if (action.type === "UNDO") {
-      const { teamId } = action;
-      const foundTeam = gs?.teams?.find(t => t.id === teamId);
-      console.log('[undo] triggered for team', teamId, {
-        gsPresent: !!gs,
-        teamFound: !!foundTeam,
-        teamKeys: foundTeam ? Object.keys(foundTeam) : null,
-        completedInTeam: foundTeam ? 'completedPositions' in foundTeam : null,
-        replacedInTeam: foundTeam ? 'replacedPositions' in foundTeam : null,
-        historyLen: foundTeam && Array.isArray(foundTeam.history) ? foundTeam.history.length : 0,
-      });
+      // Serialize async operations so two dispatches never read stale gs or pop
+      // the same history entry concurrently.
+      if (processingRef.current) {
+        console.warn('[dispatch] processing lock held — dropping UNDO. Wait a moment and try again.');
+        return;
+      }
+      processingRef.current = true;
+      try {
+        const { teamId } = action;
+        const foundTeam = gsRef.current?.teams?.find(t => t.id === teamId);
+        console.log('[undo] triggered for team', teamId, {
+          gsPresent: !!gsRef.current,
+          teamFound: !!foundTeam,
+          teamKeys: foundTeam ? Object.keys(foundTeam) : null,
+          completedInTeam: foundTeam ? 'completedPositions' in foundTeam : null,
+          replacedInTeam: foundTeam ? 'replacedPositions' in foundTeam : null,
+          historyLen: foundTeam && Array.isArray(foundTeam.history) ? foundTeam.history.length : 0,
+        });
 
-      // Read current client state snapshot
-      const clientGs = gs;
+        // Read current client state snapshot
+        const clientGs = gsRef.current;
       if (!clientGs) {
         console.warn('[undo] gs not available, aborting');
         return;
@@ -874,21 +887,28 @@ export default function App() {
       }
 
       setTimeout(() => setGs(g => g ? { ...g, undoFlashTeamId: null } : g), 600);
-    }
-
-    if (action.type === "TILE_CLICK") {
-      const { teamId, r, c } = action;
-
-      // Before applying optimistic update, fetch latest server state to incorporate
-      // any completed/replaced tiles or boss changes made by other clients.
-      let serverLatest = null;
-      try {
-        if (gameId) serverLatest = await getTeam(teamId);
-      } catch (e) {
-        console.error('[tile-click] failed to fetch latest team from server:', e);
+      } finally {
+        processingRef.current = false;
       }
+    } else if (action.type === "TILE_CLICK") {
+      if (processingRef.current) {
+        console.warn('[dispatch] processing lock held — dropping TILE_CLICK. Wait a moment and try again.');
+        return;
+      }
+      processingRef.current = true;
+      try {
+        const { teamId, r, c } = action;
 
-      setGs(g => {
+        // Before applying optimistic update, fetch latest server state to incorporate
+        // any completed/replaced tiles or boss changes made by other clients.
+        let serverLatest = null;
+        try {
+          if (gameId) serverLatest = await getTeam(teamId);
+        } catch (e) {
+          console.error('[tile-click] failed to fetch latest team from server:', e);
+        }
+
+        setGs(g => {
         if (!g || g.winner) return g;
         let team = g.teams.find(t => t.id === teamId);
         // If we have a server state, merge completed/replaced/board/bosses conservatively
@@ -1266,8 +1286,11 @@ export default function App() {
 
         return newGs;
       });
+      } finally {
+        processingRef.current = false;
+      }
     }
-  }, [isAdmin, gameId, gs]);
+  }, [isAdmin, gameId]);
 
   const handleReset = useCallback(() => {
     Object.values(timers.current).forEach(clearTimeout);
