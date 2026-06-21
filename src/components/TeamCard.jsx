@@ -60,6 +60,7 @@ export function TeamCard({ team, onTileComplete, onSetActiveBoss, onUndo, disabl
         completedPositions={team.completedPositions}
         lineCompletedPositions={team.lineCompletedPositions}
         replacedPositions={team.replacedPositions}
+        remoteFlashPositions={team.remoteFlashPositions}
       />
 
       {/* Log */}

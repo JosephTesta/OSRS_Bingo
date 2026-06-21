@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition, isLineCompleted, isReplaced }) {
+export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition, isLineCompleted, isReplaced, isFlashing }) {
   const [animCls, setAnimCls] = useState("");
   const prevId = useRef(tile.id);
 
@@ -27,7 +27,7 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
 
   return (
     <div
-      className={`tile-scene ${!clickable ? "no-hover" : ""}`}
+      className={`tile-scene ${!clickable ? "no-hover" : ""} ${isFlashing ? "tile-flash" : ""}`}
       style={{
         width: "100%",
         aspectRatio: "1",

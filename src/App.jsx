@@ -140,6 +140,12 @@ textarea{resize:vertical;}
 
 .undo-flash{animation:undoFlash .5s ease-out;}
 @keyframes undoFlash{0%{box-shadow:0 0 0 2px rgba(252,211,77,.8);}100%{box-shadow:none;}}
+
+.tile-flash{animation:tileFlash 2s ease-out;}
+@keyframes tileFlash{0%{box-shadow:0 0 0 0 rgba(252,211,77,.8);}50%{box-shadow:0 0 20px 6px rgba(252,211,77,.6);}100%{box-shadow:none;}}
+
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;font-family:'Cinzel',serif;pointer-events:none;animation:toastIn .3s ease-out;}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 `;
 
 export default function App() {
@@ -157,6 +163,11 @@ export default function App() {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((message) => {
+    setToast({ id: Date.now(), message });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   useEffect(() => {
     const el = document.createElement("style");
@@ -339,9 +350,35 @@ export default function App() {
           const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
           if (idx === -1) return prev;
           const existing = prev.teams[idx];
+
+          const remoteCompleted = remoteTeam.completedPositions || Array(25).fill(false);
+          const remoteReplaced = remoteTeam.replacedPositions || Array(25).fill(false);
+          const newFlashPositions = [];
+          for (let i = 0; i < 25; i++) {
+            const wasOccupied = (existing.completedPositions?.[i] || existing.replacedPositions?.[i]);
+            const nowOccupied = (remoteCompleted[i] || remoteReplaced[i]);
+            if (!wasOccupied && nowOccupied) {
+              newFlashPositions.push(i);
+            }
+          }
+
           const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
           const teams = [...prev.teams];
-          teams[idx] = { ...remoteTeam, history, damageFloats: [] };
+          teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions };
+
+          if (newFlashPositions.length > 0) {
+            showToast(`Another player completed ${newFlashPositions.length} tile(s)`);
+            setTimeout(() => {
+              setGs(prev2 => {
+                if (!prev2) return prev2;
+                const t2 = [...prev2.teams];
+                const clearIdx = t2.findIndex(t => t.id === remoteTeam.id);
+                if (clearIdx !== -1) t2[clearIdx] = { ...t2[clearIdx], remoteFlashPositions: [] };
+                return { ...prev2, teams: t2 };
+              });
+            }, 2500);
+          }
+
           return { ...prev, teams };
         });
       });
@@ -376,9 +413,35 @@ export default function App() {
               const idx = prev.teams.findIndex(t => t.id === remoteTeam.id);
               if (idx === -1) return prev;
               const existing = prev.teams[idx];
+
+              const remoteCompleted = remoteTeam.completedPositions || Array(25).fill(false);
+              const remoteReplaced = remoteTeam.replacedPositions || Array(25).fill(false);
+              const newFlashPositions = [];
+              for (let i = 0; i < 25; i++) {
+                const wasOccupied = (existing.completedPositions?.[i] || existing.replacedPositions?.[i]);
+                const nowOccupied = (remoteCompleted[i] || remoteReplaced[i]);
+                if (!wasOccupied && nowOccupied) {
+                  newFlashPositions.push(i);
+                }
+              }
+
               const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
               const teams = [...prev.teams];
-              teams[idx] = { ...remoteTeam, history, damageFloats: [] };
+              teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions };
+
+              if (newFlashPositions.length > 0) {
+                showToast(`Another player completed ${newFlashPositions.length} tile(s)`);
+                setTimeout(() => {
+                  setGs(prev2 => {
+                    if (!prev2) return prev2;
+                    const t2 = [...prev2.teams];
+                    const clearIdx = t2.findIndex(t => t.id === remoteTeam.id);
+                    if (clearIdx !== -1) t2[clearIdx] = { ...t2[clearIdx], remoteFlashPositions: [] };
+                    return { ...prev2, teams: t2 };
+                  });
+                }, 2500);
+              }
+
               return { ...prev, teams };
             });
           }).subscribe();
@@ -428,6 +491,7 @@ export default function App() {
         completedPositions: Array(25).fill(false),
         lineCompletedPositions: Array(25).fill(false),
         replacedPositions: Array(25).fill(false),
+        remoteFlashPositions: [],
       };
     });
     
@@ -1169,6 +1233,22 @@ export default function App() {
             requiresAdmin={requiresAdmin}
           />
         </>
+      )}
+      {toast && (
+        <div className="toast-container" key={toast.id}>
+          <div style={{
+            background: "linear-gradient(180deg,#1a0e00,#0d0600)",
+            border: "1px solid #c8a951",
+            borderRadius: 4,
+            padding: "10px 22px",
+            color: "#fcd34d",
+            fontSize: 13,
+            boxShadow: "0 4px 30px rgba(0,0,0,.8), 0 0 20px rgba(200,169,81,.12)",
+            textAlign: "center",
+          }}>
+            {toast.message}
+          </div>
+        </div>
       )}
       {showPasswordPrompt && requiresAdmin && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
