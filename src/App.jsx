@@ -778,7 +778,12 @@ export default function App() {
         const currentHp = idx === damagedBossIdx
           ? snapHp
           : (srvHp !== null && srvHp < snapHp) ? srvHp : snapHp;
-        const defeated = Boolean(sb.defeated) || (srv ? Boolean(srv.defeated) : false) || currentHp <= 0;
+        // For the damaged boss (the one being undone), ignore srv.defeated —
+        // the server still has the old defeated=true because the RPC processed
+        // this tile, but the undo is reverting it. Use only the snapshot and HP.
+        const defeated = idx === damagedBossIdx
+          ? Boolean(sb.defeated) || currentHp <= 0
+          : Boolean(sb.defeated) || (srv ? Boolean(srv.defeated) : false) || currentHp <= 0;
         return { ...sb, currentHp, defeated };
       });
 
