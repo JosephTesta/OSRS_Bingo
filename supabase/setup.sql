@@ -131,15 +131,22 @@ BEGIN
   END IF;
 
   -- If the stored tile is marked completed/flipped or the completed_positions
-  -- array indicates this index is completed, reject. For replaced positions,
-  -- allow the action only when the board's current tile looks like a fresh
-  -- replacement (client sets `isNew: true` on generated replacement tiles).
+  -- array indicates this index is completed (unless the position is replaced),
+  -- reject. For replaced positions, allow the action only when the board tile
+  -- itself is fresh (not completed/flipped), so the original stale tile after
+  -- a replacement is still blocked while a new replacement tile is allowed.
   IF COALESCE((v_tile->>'completed')::boolean, false)
      OR COALESCE((v_tile->>'flipped')::boolean, false)
-     OR COALESCE(v_team.completed_positions[p_tile_index + 1], false)
+     OR (
+       NOT COALESCE(v_team.replaced_positions[p_tile_index + 1], false)
+       AND COALESCE(v_team.completed_positions[p_tile_index + 1], false)
+     )
      OR (
        COALESCE(v_team.replaced_positions[p_tile_index + 1], false)
-       AND NOT COALESCE((v_tile->>'isNew')::boolean, false)
+       AND (
+         COALESCE((v_tile->>'completed')::boolean, false)
+         OR COALESCE((v_tile->>'flipped')::boolean, false)
+       )
      ) THEN
     RETURN jsonb_build_object('applied', false, 'reason', 'tile_already_completed');
   END IF;

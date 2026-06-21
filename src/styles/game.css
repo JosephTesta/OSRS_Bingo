@@ -42,7 +42,7 @@ textarea{resize:vertical;}
 .tile-scene:not(.no-hover):hover .tile-front{border-color:#c8a951;box-shadow:0 0 8px rgba(200,169,81,.2);}
 .tile-front.is-done{background:linear-gradient(145deg,#001800,#000e00)!important;border-color:#1a4a1a!important;box-shadow:none!important;}
 .tile-back{background:linear-gradient(145deg,#1f0000,#0e0000);border:1px solid #7a1a1a;transform:rotateY(180deg);}
-.tile-back.is-done{opacity:.38;border-color:#3a1010;background:linear-gradient(145deg,#0a0000,#050000);}
+.tile-back.is-done{opacity:.38;border-color:#3a1010;background:linear-gradient(145deg,#0a0000,#050000);transition:opacity .4s ease-out,border-color .4s ease-out,background .4s ease-out;}
 .tile-new{animation:tileIn .45s cubic-bezier(.34,1.36,.64,1) both;}
 @keyframes tileIn{from{opacity:0;transform:scale(.55) rotateY(-20deg);}to{opacity:1;transform:scale(1) rotateY(0);}}
 
