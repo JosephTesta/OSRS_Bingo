@@ -355,17 +355,21 @@ export default function App() {
           const remoteCompleted = remoteTeam.completedPositions || Array(25).fill(false);
           const remoteReplaced = remoteTeam.replacedPositions || Array(25).fill(false);
           const newFlashPositions = [];
+          const newUndonePositions = [];
           for (let i = 0; i < 25; i++) {
             const wasOccupied = (existing.completedPositions?.[i] || existing.replacedPositions?.[i]);
             const nowOccupied = (remoteCompleted[i] || remoteReplaced[i]);
             if (!wasOccupied && nowOccupied) {
               newFlashPositions.push(i);
             }
+            if (wasOccupied && !nowOccupied) {
+              newUndonePositions.push(i);
+            }
           }
 
           const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
           const teams = [...prev.teams];
-          teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions, hasRemoteUpdate: newFlashPositions.length > 0 };
+          teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions, hasRemoteUpdate: (newFlashPositions.length > 0 || newUndonePositions.length > 0) };
 
           if (newFlashPositions.length > 0) {
             showToast(`Another player completed ${newFlashPositions.length} tile(s)`);
@@ -378,6 +382,13 @@ export default function App() {
                 return { ...prev2, teams: t2 };
               });
             }, 2500);
+          }
+
+          if (newUndonePositions.length > 0) {
+            setPersistentNote({
+              id: Date.now(),
+              message: `Another player undid ${newUndonePositions.length} tile(s) on "${existing.name}". The board has been updated.`,
+            });
           }
 
           return { ...prev, teams };
@@ -418,17 +429,21 @@ export default function App() {
               const remoteCompleted = remoteTeam.completedPositions || Array(25).fill(false);
               const remoteReplaced = remoteTeam.replacedPositions || Array(25).fill(false);
               const newFlashPositions = [];
+              const newUndonePositions = [];
               for (let i = 0; i < 25; i++) {
                 const wasOccupied = (existing.completedPositions?.[i] || existing.replacedPositions?.[i]);
                 const nowOccupied = (remoteCompleted[i] || remoteReplaced[i]);
                 if (!wasOccupied && nowOccupied) {
                   newFlashPositions.push(i);
                 }
+                if (wasOccupied && !nowOccupied) {
+                  newUndonePositions.push(i);
+                }
               }
 
               const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
               const teams = [...prev.teams];
-              teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions, hasRemoteUpdate: newFlashPositions.length > 0 };
+              teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions, hasRemoteUpdate: (newFlashPositions.length > 0 || newUndonePositions.length > 0) };
 
               if (newFlashPositions.length > 0) {
                 showToast(`Another player completed ${newFlashPositions.length} tile(s)`);
@@ -441,6 +456,13 @@ export default function App() {
                     return { ...prev2, teams: t2 };
                   });
                 }, 2500);
+              }
+
+              if (newUndonePositions.length > 0) {
+                setPersistentNote({
+                  id: Date.now(),
+                  message: `Another player undid ${newUndonePositions.length} tile(s) on "${existing.name}". The board has been updated.`,
+                });
               }
 
               return { ...prev, teams };
@@ -883,16 +905,19 @@ export default function App() {
             const mergedReplaced = (team.replacedPositions || Array(25).fill(false)).map((v, i) => Boolean(v) || Boolean(serverReplaced[i]));
 
             // Detect positions the server added (completed by another player) and
-            // positions the server removed (undone by another player).
+            // positions the server removed (undone by another player). Compare against
+            // the raw SERVER state — the OR-merge preserves local state so undone
+            // positions would never show as !nowOccupied.
             const mergedFlashPositions = [];
             const mergedUndonePositions = [];
             for (let i = 0; i < 25; i++) {
               const wasOccupied = preMergeCompleted[i] || preMergeReplaced[i];
+              const serverOccupied = Boolean(serverCompleted[i]) || Boolean(serverReplaced[i]);
               const nowOccupied = mergedCompleted[i] || mergedReplaced[i];
               if (!wasOccupied && nowOccupied) {
                 mergedFlashPositions.push(i);
               }
-              if (wasOccupied && !nowOccupied) {
+              if (wasOccupied && !serverOccupied) {
                 mergedUndonePositions.push(i);
               }
             }
@@ -955,23 +980,9 @@ export default function App() {
           alert(`Tile not found locally at row ${r}, col ${c}.`);
           return g;
         }
-        if (team.completedPositions?.[tileIndex]) {
-          if (serverLatest && !preMergeCompleted[tileIndex] && serverLatest.completedPositions?.[tileIndex]) {
-            console.warn('[tile-click] position completed by another session, reloading', { teamId, r, c, tileIndex });
-            alert('This tile was already completed by another player. Reloading...');
-            loadSharedGame();
-            return g;
-          }
-          // If the server says this tile is free (another session undid it),
-          // allow the click even though our merged state still shows it.
-          if (serverLatest && !serverLatest.completedPositions?.[tileIndex] && !serverLatest.replacedPositions?.[tileIndex]) {
-            console.log('[tile-click] tile was undone by another session, allowing click', { teamId, r, c, tileIndex });
-          } else {
-            console.warn('[tile-click] position already completed, blocking click', { teamId, r, c, tileIndex });
-            return g;
-          }
-        }
         if (team.replacedPositions?.[tileIndex]) {
+          // Replaced positions take precedence over completedPositions, since the
+          // OR-merge may re-set completedPositions=true from stale server data.
           if (serverLatest && !preMergeReplaced[tileIndex] && serverLatest.replacedPositions?.[tileIndex]) {
             console.warn('[tile-click] position replaced by another session, reloading', { teamId, r, c, tileIndex });
             alert('This tile was already completed by another player. Reloading...');
@@ -985,6 +996,21 @@ export default function App() {
           }
           if (currentTile.flipped || currentTile.completed) {
             console.warn('[tile-click] replaced tile already flipped/completed, blocking click', { teamId, r, c, tileIndex });
+            return g;
+          }
+        } else if (team.completedPositions?.[tileIndex]) {
+          if (serverLatest && !preMergeCompleted[tileIndex] && serverLatest.completedPositions?.[tileIndex]) {
+            console.warn('[tile-click] position completed by another session, reloading', { teamId, r, c, tileIndex });
+            alert('This tile was already completed by another player. Reloading...');
+            loadSharedGame();
+            return g;
+          }
+          // If the server says this tile is free (another session undid it),
+          // allow the click even though our merged state still shows it.
+          if (serverLatest && !serverLatest.completedPositions?.[tileIndex] && !serverLatest.replacedPositions?.[tileIndex]) {
+            console.log('[tile-click] tile was undone by another session, allowing click', { teamId, r, c, tileIndex });
+          } else {
+            console.warn('[tile-click] position already completed, blocking click', { teamId, r, c, tileIndex });
             return g;
           }
         }
