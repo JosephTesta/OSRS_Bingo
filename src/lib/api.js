@@ -243,6 +243,89 @@ export async function saveTeamState(teamId, teamData) {
   }
 }
 
+export async function saveUndoState(teamId, teamData, gameId) {
+  console.log('saveUndoState called', { teamId, gameId });
+  try {
+    const { data, error } = await supabase.rpc('undo_tile_action', {
+      p_team_id: teamId,
+      p_game_id: gameId,
+      p_board: teamData.board,
+      p_bosses: teamData.bosses,
+      p_active_boss_index: teamData.active_boss_index,
+      p_log: teamData.log || [],
+      p_history: teamData.history || [],
+      p_completed_positions: teamData.completed_positions,
+      p_replaced_positions: teamData.replaced_positions,
+      p_line_completed_positions: teamData.line_completed_positions,
+      p_exhausted_tasks: teamData.exhausted_tasks || [],
+    });
+    if (error) throw error;
+    console.log('saveUndoState RPC result:', data);
+    return data;
+  } catch (e) {
+    console.warn('saveUndoState RPC failed, falling back to direct update:', e);
+    return saveUndoStateFallback(teamId, teamData, gameId);
+  }
+}
+
+async function saveUndoStateFallback(teamId, teamData, gameId) {
+  console.log('saveUndoStateFallback called', { teamId, gameId });
+  // Direct UPDATE — no OR/min merge; undo already accounted for server state.
+  const dbUpdates = {
+    board: teamData.board,
+    exhausted_tasks: teamData.exhausted_tasks,
+    completed_positions: teamData.completed_positions,
+    line_completed_positions: teamData.line_completed_positions,
+    replaced_positions: teamData.replaced_positions,
+    bosses: teamData.bosses,
+    active_boss_index: teamData.active_boss_index,
+    log: teamData.log || [],
+    history: teamData.history || [],
+  };
+
+  const { error: updateError } = await supabase
+    .from('teams')
+    .update(dbUpdates)
+    .eq('id', teamId);
+
+  if (updateError) {
+    console.error('saveUndoStateFallback update error:', updateError);
+    throw updateError;
+  }
+
+  // Fetch the raw team row (snake_case keys) for the realtime payload
+  const { data: rawTeam, error: fetchError } = await supabase
+    .from('teams')
+    .select('*')
+    .eq('id', teamId)
+    .single();
+
+  if (fetchError) {
+    console.warn('saveUndoStateFallback: could not re-fetch team for realtime broadcast:', fetchError);
+    return;
+  }
+
+  if (rawTeam && gameId) {
+    const actionPayload = {
+      action_type: 'UNDO',
+      team: rawTeam,
+    };
+    const { error: actionError } = await supabase
+      .from('game_actions')
+      .insert({
+        game_id: gameId,
+        team_id: teamId,
+        action_type: 'UNDO',
+        payload: actionPayload,
+      });
+    if (actionError) {
+      console.error('saveUndoStateFallback: failed to insert game_actions row:', actionError);
+    } else {
+      console.log('saveUndoStateFallback: game_actions row inserted for realtime broadcast');
+    }
+  }
+}
+
 async function saveTeamStateFallback(teamId, teamData) {
   const latest = await getTeam(teamId);
   

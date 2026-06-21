@@ -268,3 +268,62 @@ BEGIN
   RETURN jsonb_build_object('applied', true, 'action_id', v_action_id, 'team', v_team);
 END;
 $BODY$;
+
+DROP FUNCTION IF EXISTS undo_tile_action(
+  UUID, UUID, JSONB, JSONB, INTEGER, JSONB, JSONB, BOOLEAN[], BOOLEAN[], BOOLEAN[], TEXT[]
+);
+
+CREATE OR REPLACE FUNCTION undo_tile_action(
+  p_team_id UUID,
+  p_game_id UUID,
+  p_board JSONB,
+  p_bosses JSONB,
+  p_active_boss_index INTEGER,
+  p_log JSONB,
+  p_history JSONB,
+  p_completed_positions BOOLEAN[],
+  p_replaced_positions BOOLEAN[],
+  p_line_completed_positions BOOLEAN[],
+  p_exhausted_tasks TEXT[]
+) RETURNS JSONB
+LANGUAGE plpgsql
+AS $BODY$
+DECLARE
+  v_team RECORD;
+  v_action_id UUID;
+  v_payload JSONB;
+BEGIN
+  SELECT * INTO v_team
+  FROM teams
+  WHERE id = p_team_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('applied', false, 'reason', 'team_not_found');
+  END IF;
+
+  UPDATE teams
+  SET board = p_board,
+      bosses = p_bosses,
+      active_boss_index = p_active_boss_index,
+      log = COALESCE(p_log, '[]'::jsonb),
+      history = COALESCE(p_history, '[]'::jsonb),
+      completed_positions = p_completed_positions,
+      replaced_positions = p_replaced_positions,
+      line_completed_positions = p_line_completed_positions,
+      exhausted_tasks = COALESCE(p_exhausted_tasks, ARRAY[]::text[])
+  WHERE id = p_team_id
+  RETURNING * INTO v_team;
+
+  v_payload := jsonb_build_object(
+    'action_type', 'UNDO',
+    'team', to_jsonb(v_team)
+  );
+
+  INSERT INTO game_actions (game_id, team_id, action_type, payload)
+  VALUES (p_game_id, p_team_id, 'UNDO', v_payload)
+  RETURNING id INTO v_action_id;
+
+  RETURN jsonb_build_object('applied', true, 'action_id', v_action_id, 'team', v_team);
+END;
+$BODY$;

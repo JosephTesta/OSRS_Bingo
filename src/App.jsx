@@ -4,7 +4,7 @@ import { DEFAULT_TASKS } from "./data/tasks";
 import { BOSSES_DATA } from "./data/bosses";
 import { AdminPanel } from "./components/AdminPanel";
 import { GameView } from "./components/GameView";
-import { getGame, getTeams, getTeam, verifyAdminPassword, createGame, createTeam, saveTeamState, applyTileAction } from "./lib/api";
+import { getGame, getTeams, getTeam, verifyAdminPassword, createGame, createTeam, saveUndoState, applyTileAction } from "./lib/api";
 import { supabase } from "./lib/supabase";
 
 const uid     = () => Math.random().toString(36).slice(2, 9);
@@ -541,10 +541,13 @@ export default function App() {
       const resolvedPositions = [...(snapshot.completedPositions || Array(25).fill(false))];
       const resolvedReplaced = [...(snapshot.replacedPositions || Array(25).fill(false))];
 
+      // Only preserve server completions that were already in the snapshot
+      // (completed by actions BEFORE the one we're undoing). The tile action
+      // we're undoing was already saved to the server, so unconditionally
+      // preserving server completions would prevent undoing our own tile.
       for (let i = 0; i < 25; i++) {
-        // If server shows this position completed/replaced after snapshot, preserve it
-        if (serverCompleted[i]) resolvedPositions[i] = true;
-        if (serverReplaced[i]) resolvedReplaced[i] = true;
+        if (serverCompleted[i] && resolvedPositions[i]) resolvedPositions[i] = true;
+        if (serverReplaced[i] && resolvedReplaced[i]) resolvedReplaced[i] = true;
       }
 
       const revealedBoard = restoredBoard.map((row, ri) =>
@@ -721,7 +724,7 @@ export default function App() {
 
       if (gameId && isAdmin) {
         console.log('[undo] saving undone team state to database');
-        saveTeamState(teamId, transformBack(updatedTeam)).catch(err => {
+        saveUndoState(teamId, transformBack(updatedTeam), gameId).catch(err => {
           console.error('[undo] failed to save undo state:', err);
         });
       }
