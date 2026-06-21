@@ -270,7 +270,7 @@ END;
 $BODY$;
 
 DROP FUNCTION IF EXISTS undo_tile_action(
-  UUID, UUID, JSONB, JSONB, INTEGER, JSONB, JSONB, BOOLEAN[], BOOLEAN[], BOOLEAN[], TEXT[]
+  UUID, UUID, JSONB, JSONB, INTEGER, JSONB, JSONB, BOOLEAN[], BOOLEAN[], BOOLEAN[], TEXT[], BOOLEAN[], BOOLEAN[], TEXT
 );
 
 CREATE OR REPLACE FUNCTION undo_tile_action(
@@ -284,7 +284,10 @@ CREATE OR REPLACE FUNCTION undo_tile_action(
   p_completed_positions BOOLEAN[],
   p_replaced_positions BOOLEAN[],
   p_line_completed_positions BOOLEAN[],
-  p_exhausted_tasks TEXT[]
+  p_exhausted_tasks TEXT[],
+  p_expected_completed_positions BOOLEAN[] DEFAULT NULL,
+  p_expected_replaced_positions BOOLEAN[] DEFAULT NULL,
+  p_client_action_id TEXT DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql
 AS $BODY$
@@ -292,6 +295,7 @@ DECLARE
   v_team RECORD;
   v_action_id UUID;
   v_payload JSONB;
+  v_i INTEGER;
 BEGIN
   SELECT * INTO v_team
   FROM teams
@@ -300,6 +304,17 @@ BEGIN
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('applied', false, 'reason', 'team_not_found');
+  END IF;
+
+  -- Stale-snapshot check: verify no concurrent modifications since the
+  -- expected state was fetched by the client.
+  IF p_expected_completed_positions IS NOT NULL THEN
+    FOR v_i IN 1..25 LOOP
+      IF COALESCE(v_team.completed_positions[v_i], false) != COALESCE(p_expected_completed_positions[v_i], false)
+         OR COALESCE(v_team.replaced_positions[v_i], false) != COALESCE(p_expected_replaced_positions[v_i], false) THEN
+        RETURN jsonb_build_object('applied', false, 'reason', 'concurrent_modification');
+      END IF;
+    END LOOP;
   END IF;
 
   UPDATE teams
@@ -317,6 +332,7 @@ BEGIN
 
   v_payload := jsonb_build_object(
     'action_type', 'UNDO',
+    'client_action_id', p_client_action_id,
     'team', to_jsonb(v_team)
   );
 

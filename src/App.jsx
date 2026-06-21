@@ -525,7 +525,7 @@ export default function App() {
       const snapshot = history.pop();
       console.log('[undo] preparing to restore snapshot for team', teamId, 'from history depth:', history.length, 'snapshotKeys:', snapshot ? Object.keys(snapshot) : null);
 
-      // Fetch latest server state to avoid overwriting other players' progress
+      // Fetch latest server state to detect concurrent modifications
       let serverLatest = null;
       try {
         if (gameId) serverLatest = await getTeam(teamId);
@@ -536,19 +536,46 @@ export default function App() {
       const serverCompleted = (serverLatest && serverLatest.completedPositions) || (team.completedPositions || Array(25).fill(false));
       const serverReplaced = (serverLatest && serverLatest.replacedPositions) || (team.replacedPositions || Array(25).fill(false));
 
-      // Build restored board from snapshot but don't revert positions that others completed
+      // Stale-snapshot check: if the server state differs from our current
+      // team state, another session made changes we haven't synced. Abort undo.
+      if (gameId && serverLatest) {
+        let stale = false;
+        const teamCompleted = team.completedPositions || Array(25).fill(false);
+        const teamReplaced = team.replacedPositions || Array(25).fill(false);
+        const snapCompleted = snapshot.completedPositions || Array(25).fill(false);
+        const snapReplaced = snapshot.replacedPositions || Array(25).fill(false);
+
+        // If server has a completion that's NOT in snapshot AND NOT in current
+        // team state, another session modified the board since our last sync.
+        for (let i = 0; i < 25; i++) {
+          if (serverCompleted[i] && !snapCompleted[i] && !teamCompleted[i]) {
+            stale = true; break;
+          }
+          if (serverReplaced[i] && !snapReplaced[i] && !teamReplaced[i]) {
+            stale = true; break;
+          }
+          // Also detect if the server lost a completion we still have (another
+          // session's undo that we haven't received via realtime yet).
+          if (!serverCompleted[i] && snapCompleted[i] && teamCompleted[i]) {
+            stale = true; break;
+          }
+          if (!serverReplaced[i] && snapReplaced[i] && teamReplaced[i]) {
+            stale = true; break;
+          }
+        }
+
+        if (stale) {
+          console.warn('[undo] concurrent modification detected, reloading game state');
+          alert('The game state has changed in another session. Reloading latest state. Please try the undo again.');
+          loadSharedGame();
+          return;
+        }
+      }
+
+      const undoActionId = uid();
       const restoredBoard = snapshot.board;
       const resolvedPositions = [...(snapshot.completedPositions || Array(25).fill(false))];
       const resolvedReplaced = [...(snapshot.replacedPositions || Array(25).fill(false))];
-
-      // Only preserve server completions that were already in the snapshot
-      // (completed by actions BEFORE the one we're undoing). The tile action
-      // we're undoing was already saved to the server, so unconditionally
-      // preserving server completions would prevent undoing our own tile.
-      for (let i = 0; i < 25; i++) {
-        if (serverCompleted[i] && resolvedPositions[i]) resolvedPositions[i] = true;
-        if (serverReplaced[i] && resolvedReplaced[i]) resolvedReplaced[i] = true;
-      }
 
       const revealedBoard = restoredBoard.map((row, ri) =>
         row.map((tl, ci) => {
@@ -651,7 +678,7 @@ export default function App() {
         const srv = serverLatest && serverLatest.bosses && serverLatest.bosses[idx] ? serverLatest.bosses[idx] : null;
         const srvHp = srv ? Number(srv.currentHp || 0) : null;
         const snapHp = Number(sb.currentHp || 0);
-        const currentHp = (srvHp !== null && srvHp < currentTeamBossHp) ? srvHp : snapHp;
+        const currentHp = (srvHp !== null && srvHp < snapHp) ? srvHp : snapHp;
         const defeated = Boolean(sb.defeated) || (srv ? Boolean(srv.defeated) : false) || currentHp <= 0;
         return { ...sb, currentHp, defeated };
       });
@@ -664,41 +691,9 @@ export default function App() {
         task: '',
         type: 'restore',
       };
-      // Reconstruct or derive the log for the restored state.
-      // Prefer the snapshot's log if present. If missing (older snapshots),
-      // attempt to remove the most recent damage entries that correspond to
-      // tiles that were resolved after the snapshot.
-      const snapLog = Array.isArray(snapshot.log) ? snapshot.log : null;
-      let baseLog = [];
-      if (snapLog) {
-        baseLog = [...snapLog];
-      } else {
-        // Count how many tiles are resolved now that weren't in the snapshot
-        const currCompleted = team.completedPositions || Array(25).fill(false);
-        const currReplaced = team.replacedPositions || Array(25).fill(false);
-        const snapCompleted = snapshot.completedPositions || Array(25).fill(false);
-        const snapReplaced = snapshot.replacedPositions || Array(25).fill(false);
-        let changeCount = 0;
-        for (let i = 0; i < 25; i++) {
-          const nowResolved = Boolean(currCompleted[i] || currReplaced[i]);
-          const wasResolved = Boolean(snapCompleted[i] || snapReplaced[i]);
-          if (nowResolved && !wasResolved) changeCount++;
-        }
-
-        // Remove up to `changeCount` trailing damage log entries from current log
-        const rev = [...(team.log || [])].slice().reverse();
-        const kept = [];
-        let removed = 0;
-        for (const entry of rev) {
-          if (removed < changeCount && entry && entry.type === 'damage') {
-            removed++;
-            continue;
-          }
-          kept.push(entry);
-        }
-        baseLog = kept.reverse();
-        console.log('[undo] reconstructed log from team.log', { removed, changeCount, before: (team.log || []).length, after: baseLog.length });
-      }
+      // Keep the full log history — preserve damage entries from the tile being
+      // undone and append the restore entry so the full history is visible.
+      const baseLog = [...(team.log || [])];
 
       const updatedTeam = {
         ...team,
@@ -724,8 +719,16 @@ export default function App() {
 
       if (gameId && isAdmin) {
         console.log('[undo] saving undone team state to database');
-        saveUndoState(teamId, transformBack(updatedTeam), gameId).catch(err => {
-          console.error('[undo] failed to save undo state:', err);
+        const teamData = transformBack(updatedTeam);
+        localActionIds.current.add(undoActionId);
+        saveUndoState(teamId, teamData, gameId, serverCompleted, serverReplaced, undoActionId).catch(err => {
+          if (err?.message?.includes('concurrent_modification') || err?.details?.includes('concurrent_modification')) {
+            console.warn('[undo] concurrent modification detected by server, reloading');
+            alert('Another change was made while undoing. Reloading latest state.');
+            loadSharedGame();
+          } else {
+            console.error('[undo] failed to save undo state:', err);
+          }
         });
       }
 
@@ -793,21 +796,30 @@ export default function App() {
           alert(`Tile not found locally at row ${r}, col ${c}.`);
           return g;
         }
-        // If the position is marked completed, block clicks.
-        // If the position is marked replaced, allow clicks only when the
-        // current tile at this position is a fresh replacement (not flipped/completed).
         if (team.completedPositions?.[tileIndex]) {
+          console.warn('[tile-click] position already completed, blocking click', { teamId, r, c, tileIndex });
           return g;
         }
         if (team.replacedPositions?.[tileIndex]) {
           const currentTile = team.board[r][c];
-          if (!currentTile) return g;
-          if (currentTile.flipped || currentTile.completed) return g;
-          // otherwise allow clicking the replaced/new tile
+          if (!currentTile) {
+            console.warn('[tile-click] replaced position has no current tile', { teamId, r, c, tileIndex });
+            return g;
+          }
+          if (currentTile.flipped || currentTile.completed) {
+            console.warn('[tile-click] replaced tile already flipped/completed, blocking click', { teamId, r, c, tileIndex });
+            return g;
+          }
         }
-        if (tile.flipped || tile.completed) return g;
+        if (tile.flipped || tile.completed) {
+          console.warn('[tile-click] tile already flipped or completed', { teamId, r, c, tileIndex, flipped: tile.flipped, completed: tile.completed });
+          return g;
+        }
         const boss = team.bosses[team.activeBossIndex];
-        if (!boss || boss.defeated) return g;
+        if (!boss || boss.defeated) {
+          console.warn('[tile-click] boss not available', { teamId, r, c, tileIndex, boss, activeBossIndex: team.activeBossIndex });
+          return g;
+        }
 
         let dmg = tile.damage;
         const floatId = uid();

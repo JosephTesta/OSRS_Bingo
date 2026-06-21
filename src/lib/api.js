@@ -243,8 +243,8 @@ export async function saveTeamState(teamId, teamData) {
   }
 }
 
-export async function saveUndoState(teamId, teamData, gameId) {
-  console.log('saveUndoState called', { teamId, gameId });
+export async function saveUndoState(teamId, teamData, gameId, expectedCompleted, expectedReplaced, clientActionId) {
+  console.log('saveUndoState called', { teamId, gameId, clientActionId });
   try {
     const { data, error } = await supabase.rpc('undo_tile_action', {
       p_team_id: teamId,
@@ -258,18 +258,44 @@ export async function saveUndoState(teamId, teamData, gameId) {
       p_replaced_positions: teamData.replaced_positions,
       p_line_completed_positions: teamData.line_completed_positions,
       p_exhausted_tasks: teamData.exhausted_tasks || [],
+      p_expected_completed_positions: expectedCompleted,
+      p_expected_replaced_positions: expectedReplaced,
+      p_client_action_id: clientActionId || null,
     });
     if (error) throw error;
+    if (data?.applied === false) {
+      const err = new Error(data.reason || 'concurrent_modification');
+      err.details = data.reason;
+      throw err;
+    }
     console.log('saveUndoState RPC result:', data);
     return data;
   } catch (e) {
+    if (e.details === 'concurrent_modification' || e.message?.includes('concurrent_modification')) throw e;
     console.warn('saveUndoState RPC failed, falling back to direct update:', e);
-    return saveUndoStateFallback(teamId, teamData, gameId);
+    return saveUndoStateFallback(teamId, teamData, gameId, expectedCompleted, expectedReplaced, clientActionId);
   }
 }
 
-async function saveUndoStateFallback(teamId, teamData, gameId) {
-  console.log('saveUndoStateFallback called', { teamId, gameId });
+async function saveUndoStateFallback(teamId, teamData, gameId, expectedCompleted, expectedReplaced, clientActionId) {
+  console.log('saveUndoStateFallback called', { teamId, gameId, clientActionId });
+
+  // Re-fetch server state to verify no concurrent modifications
+  if (gameId && expectedCompleted) {
+    const latest = await getTeam(teamId);
+    if (latest) {
+      const serverComp = latest.completedPositions || Array(25).fill(false);
+      const serverRepl = latest.replacedPositions || Array(25).fill(false);
+      for (let i = 0; i < 25; i++) {
+        if (serverComp[i] !== expectedCompleted[i] || serverRepl[i] !== expectedReplaced[i]) {
+          const err = new Error('concurrent_modification');
+          err.details = 'concurrent_modification';
+          throw err;
+        }
+      }
+    }
+  }
+
   // Direct UPDATE — no OR/min merge; undo already accounted for server state.
   const dbUpdates = {
     board: teamData.board,
@@ -308,6 +334,7 @@ async function saveUndoStateFallback(teamId, teamData, gameId) {
   if (rawTeam && gameId) {
     const actionPayload = {
       action_type: 'UNDO',
+      client_action_id: clientActionId,
       team: rawTeam,
     };
     const { error: actionError } = await supabase
