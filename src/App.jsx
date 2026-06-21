@@ -168,6 +168,7 @@ export default function App() {
     setToast({ id: Date.now(), message });
     setTimeout(() => setToast(null), 3000);
   }, []);
+  const [persistentNote, setPersistentNote] = useState(null);
 
   useEffect(() => {
     const el = document.createElement("style");
@@ -881,13 +882,18 @@ export default function App() {
             const mergedCompleted = (team.completedPositions || Array(25).fill(false)).map((v, i) => Boolean(v) || Boolean(serverCompleted[i]));
             const mergedReplaced = (team.replacedPositions || Array(25).fill(false)).map((v, i) => Boolean(v) || Boolean(serverReplaced[i]));
 
-            // Detect which positions were newly occupied by the server merge
+            // Detect positions the server added (completed by another player) and
+            // positions the server removed (undone by another player).
             const mergedFlashPositions = [];
+            const mergedUndonePositions = [];
             for (let i = 0; i < 25; i++) {
               const wasOccupied = preMergeCompleted[i] || preMergeReplaced[i];
               const nowOccupied = mergedCompleted[i] || mergedReplaced[i];
               if (!wasOccupied && nowOccupied) {
                 mergedFlashPositions.push(i);
+              }
+              if (wasOccupied && !nowOccupied) {
+                mergedUndonePositions.push(i);
               }
             }
 
@@ -905,7 +911,6 @@ export default function App() {
 
             if (mergedFlashPositions.length > 0) {
               team = { ...team, remoteFlashPositions: mergedFlashPositions };
-              showToast(`Board synced — ${mergedFlashPositions.length} tile(s) from another player`);
               setTimeout(() => {
                 setGs(prev2 => {
                   if (!prev2) return prev2;
@@ -915,6 +920,16 @@ export default function App() {
                   return { ...prev2, teams: clearTeams };
                 });
               }, 2500);
+            }
+
+            if (mergedFlashPositions.length > 0 || mergedUndonePositions.length > 0) {
+              const parts = [];
+              if (mergedFlashPositions.length > 0) parts.push(`completed ${mergedFlashPositions.length} tile(s)`);
+              if (mergedUndonePositions.length > 0) parts.push(`undid ${mergedUndonePositions.length} tile(s)`);
+              setPersistentNote({
+                id: Date.now(),
+                message: `Another player ${parts.join(' and ')}. The board has been updated.`,
+              });
             }
           } catch (e) {
             console.error('[tile-click] error merging server state:', e);
@@ -1312,6 +1327,21 @@ export default function App() {
             textAlign: "center",
           }}>
             {toast.message}
+          </div>
+        </div>
+      )}
+      {persistentNote && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, backdropFilter: "blur(2px)" }} onClick={() => setPersistentNote(null)}>
+          <div style={{ background: "linear-gradient(145deg,#1a0e00,#0d0600)", border: "2px solid #f59e0b", borderRadius: 6, padding: "28px 36px", maxWidth: 420, width: "90%", textAlign: "center", boxShadow: "0 8px 40px rgba(0,0,0,.9), 0 0 30px rgba(245,158,11,.15)" }} onClick={e => e.stopPropagation()}>
+            <div className="cf" style={{ fontSize: 14, color: "#f59e0b", fontWeight: 700, marginBottom: 12, letterSpacing: ".08em", textTransform: "uppercase" }}>
+              ⚠ Board Updated
+            </div>
+            <p style={{ color: "#c8a951", fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
+              {persistentNote.message}
+            </p>
+            <button className="btn btn-amber" style={{ fontSize: 11, padding: "8px 24px" }} onClick={() => setPersistentNote(null)}>
+              Got it
+            </button>
           </div>
         </div>
       )}

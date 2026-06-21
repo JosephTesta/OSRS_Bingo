@@ -19,10 +19,10 @@ export function BingoTile({ tile, r, c, onComplete, noClick, isCompletedPosition
   // should still be clickable (they are new tiles overwriting completed ones).
   const isPositionResolved = isCompletedPosition || isLineCompleted;
   const showBack = isDone;
-  // Allow clicks on replaced tiles even if the previous tile at this position was completed.
-  // If the tile has been replaced, ignore `isCompletedPosition` (but still block when the
-  // entire line is completed). Otherwise preserve the original resolved checks.
-  const clickable = !noClick && (!isReplaced ? (!isPositionResolved && !isDone) : !isLineCompleted);
+  // Allow clicks on replaced tiles even if the previous tile at this position was completed,
+  // or if the line was already completed — replaced tiles have fresh tasks and should always
+  // be completable. Non-replaced tiles follow the original resolved/done logic.
+  const clickable = !noClick && (!isReplaced ? (!isPositionResolved && !isDone) : true);
   const showOutline = isPositionResolved || isReplaced;
 
   return (
