@@ -1116,7 +1116,7 @@ export default function App() {
               newTask = available[0];
               newExhaustedTasks = [...team.exhaustedTasks, newTask];
             }
-            pendingReplacement = makeTile(newTask, g.settings.dMin, g.settings.dMax, true, g.settings.randomizeDamage, g.settings.fixedDamage);
+            pendingReplacement = makeTile(newTask, g.settings.dMin, g.settings.dMax, false, g.settings.randomizeDamage, g.settings.fixedDamage);
           }
         }
 

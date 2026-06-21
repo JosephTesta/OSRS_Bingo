@@ -28,7 +28,7 @@ export function GameView({ gs, dispatch, onReset, onExport, isAdmin = true, requ
         </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", alignItems: "flex-start" }}>
         {teams.map(team => (
           <TeamCard
             key={team.id}
