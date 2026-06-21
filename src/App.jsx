@@ -937,7 +937,7 @@ export default function App() {
               if (!wasOccupied && nowOccupied) {
                 mergedFlashPositions.push(i);
               }
-              if (wasOccupied && !serverOccupied) {
+              if (wasOccupied && !serverOccupied && !preMergeReplaced[i]) {
                 mergedUndonePositions.push(i);
               }
             }
