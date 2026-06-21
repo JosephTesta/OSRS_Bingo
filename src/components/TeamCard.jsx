@@ -11,7 +11,7 @@ export function TeamCard({ team, onTileComplete, onSetActiveBoss, onUndo, disabl
   return (
     <div
       className={`panel${undoFlash ? " undo-flash" : ""}`}
-      style={{ flex: "1 1 265px", minWidth: 252, overflow: "hidden", border: allDone ? "2px solid #c8a951" : undefined }}
+      style={{ flex: "1 1 265px", minWidth: 252, maxWidth: 380, overflow: "hidden", border: allDone ? "2px solid #c8a951" : undefined }}
     >
       {/* Header */}
       <div
