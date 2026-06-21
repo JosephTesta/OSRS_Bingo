@@ -364,7 +364,7 @@ export default function App() {
 
           const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
           const teams = [...prev.teams];
-          teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions };
+          teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions, hasRemoteUpdate: newFlashPositions.length > 0 };
 
           if (newFlashPositions.length > 0) {
             showToast(`Another player completed ${newFlashPositions.length} tile(s)`);
@@ -427,7 +427,7 @@ export default function App() {
 
               const history = Array.isArray(remoteTeam.history) && remoteTeam.history.length > 0 ? remoteTeam.history : existing.history || [];
               const teams = [...prev.teams];
-              teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions };
+              teams[idx] = { ...remoteTeam, history, damageFloats: [], remoteFlashPositions: newFlashPositions, hasRemoteUpdate: newFlashPositions.length > 0 };
 
               if (newFlashPositions.length > 0) {
                 showToast(`Another player completed ${newFlashPositions.length} tile(s)`);
@@ -583,7 +583,7 @@ export default function App() {
         console.warn('[undo] gs not available, aborting');
         return;
       }
-      const team = clientGs.teams.find(t => t.id === teamId);
+      let team = clientGs.teams.find(t => t.id === teamId);
       if (!team) {
         console.warn('[undo] team not found in gs', teamId);
         return;
@@ -607,6 +607,20 @@ export default function App() {
 
       const serverCompleted = (serverLatest && serverLatest.completedPositions) || (team.completedPositions || Array(25).fill(false));
       const serverReplaced = (serverLatest && serverLatest.replacedPositions) || (team.replacedPositions || Array(25).fill(false));
+
+      // If team has pending remote updates, merge server state now to avoid
+      // false stale positives and allow undo to proceed.
+      if (team.hasRemoteUpdate && serverLatest) {
+        console.log('[undo] team has remote updates, merging server state before stale check', teamId);
+        const curCompleted = team.completedPositions || Array(25).fill(false);
+        const curReplaced = team.replacedPositions || Array(25).fill(false);
+        team = {
+          ...team,
+          completedPositions: curCompleted.map((v, i) => Boolean(v) || Boolean(serverCompleted[i])),
+          replacedPositions: curReplaced.map((v, i) => Boolean(v) || Boolean(serverReplaced[i])),
+          hasRemoteUpdate: false,
+        };
+      }
 
       // Stale-snapshot check: if the server state differs from our current
       // team state, another session made changes we haven't synced. Abort undo.
@@ -867,6 +881,16 @@ export default function App() {
             const mergedCompleted = (team.completedPositions || Array(25).fill(false)).map((v, i) => Boolean(v) || Boolean(serverCompleted[i]));
             const mergedReplaced = (team.replacedPositions || Array(25).fill(false)).map((v, i) => Boolean(v) || Boolean(serverReplaced[i]));
 
+            // Detect which positions were newly occupied by the server merge
+            const mergedFlashPositions = [];
+            for (let i = 0; i < 25; i++) {
+              const wasOccupied = preMergeCompleted[i] || preMergeReplaced[i];
+              const nowOccupied = mergedCompleted[i] || mergedReplaced[i];
+              if (!wasOccupied && nowOccupied) {
+                mergedFlashPositions.push(i);
+              }
+            }
+
             // Merge bosses: prefer the lower currentHp (preserve damage applied by others)
             const mergedBosses = (team.bosses || []).map((b, i) => {
               const sb = serverBosses[i] || {};
@@ -877,7 +901,21 @@ export default function App() {
               return { ...b, ...sb, currentHp, defeated };
             });
 
-            team = { ...team, board: serverBoard, bosses: mergedBosses, completedPositions: mergedCompleted, replacedPositions: mergedReplaced, activeBossIndex: serverLatest.activeBossIndex ?? team.activeBossIndex };
+            team = { ...team, board: serverBoard, bosses: mergedBosses, completedPositions: mergedCompleted, replacedPositions: mergedReplaced, activeBossIndex: serverLatest.activeBossIndex ?? team.activeBossIndex, hasRemoteUpdate: false };
+
+            if (mergedFlashPositions.length > 0) {
+              team = { ...team, remoteFlashPositions: mergedFlashPositions };
+              showToast(`Board synced — ${mergedFlashPositions.length} tile(s) from another player`);
+              setTimeout(() => {
+                setGs(prev2 => {
+                  if (!prev2) return prev2;
+                  const clearTeams = [...prev2.teams];
+                  const clearIdx = clearTeams.findIndex(t => t.id === teamId);
+                  if (clearIdx !== -1) clearTeams[clearIdx] = { ...clearTeams[clearIdx], remoteFlashPositions: [] };
+                  return { ...prev2, teams: clearTeams };
+                });
+              }, 2500);
+            }
           } catch (e) {
             console.error('[tile-click] error merging server state:', e);
           }
@@ -1062,6 +1100,7 @@ export default function App() {
           log:                    [...team.log, logEntry],
           damageFloats:           [...(team.damageFloats || []), newFloat],
           history:                [...team.history, snapshotTeam(team, g)],
+          hasRemoteUpdate:        false,
         };
 
         const newTeams    = g.teams.map(t => t.id === teamId ? updatedTeam : t);

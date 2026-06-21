@@ -34,13 +34,27 @@ export function TeamCard({ team, onTileComplete, onSetActiveBoss, onUndo, disabl
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 10, color: "#5a4020" }}>{done}/25 ✓</span>
+          {team.hasRemoteUpdate && (
+            <span
+              style={{ fontSize: 9, color: "#f59e0b", cursor: "help", fontFamily: "'Cinzel',serif" }}
+              title="Another player made changes. Click a tile or refresh to sync before undoing."
+            >
+              ⚠
+            </span>
+          )}
           <button
-            className="btn btn-amber"
-            style={{ fontSize: 9, padding: "3px 9px" }}
+            className={`btn ${team.hasRemoteUpdate ? "btn-amber" : "btn-amber"}`}
+            style={{ fontSize: 9, padding: "3px 9px", opacity: team.hasRemoteUpdate ? 0.7 : undefined }}
             disabled={!canUndo}
-            title={canUndo ? `Undo last tile (${team.history.length} available)` : "Nothing to undo"}
+            title={
+              !canUndo
+                ? "Nothing to undo"
+                : team.hasRemoteUpdate
+                  ? "Board updated by another player — sync before undoing"
+                  : `Undo last tile (${team.history.length} available)`
+            }
             onClick={() => {
-              console.log('[TeamCard] undo click', { teamId: team.id, historyLength: team.history?.length, disabled, canUndo });
+              console.log('[TeamCard] undo click', { teamId: team.id, historyLength: team.history?.length, disabled, canUndo, hasRemoteUpdate: team.hasRemoteUpdate });
               onUndo(team.id);
             }}
           >
@@ -49,6 +63,11 @@ export function TeamCard({ team, onTileComplete, onSetActiveBoss, onUndo, disabl
         </div>
       </div>
 
+      {team.hasRemoteUpdate && (
+        <div style={{ padding: "3px 7px", background: "rgba(245,158,11,0.12)", borderBottom: "1px solid rgba(245,158,11,0.25)", fontSize: 10, color: "#f59e0b", fontFamily: "'Cinzel',serif", textAlign: "center", letterSpacing: "0.05em" }}>
+          ↻ Board updated by another player
+        </div>
+      )}
       {/* Per-team boss HP */}
       <TeamBossSection bosses={team.bosses} activeBossIndex={team.activeBossIndex} damageFloats={team.damageFloats || []} onSetActive={bossId => onSetActiveBoss(team.id, bossId)} />
 
