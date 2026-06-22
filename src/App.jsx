@@ -1343,6 +1343,7 @@ export default function App() {
     }
     setGs(null);
     setActiveGameId(null);
+    setSavedSettings(null);
     setPhase("setup");
     setIsAdmin(false);
     setRequiresAdmin(false);
