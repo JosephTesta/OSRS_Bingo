@@ -153,13 +153,6 @@ export default function App() {
   const [gs, setGs] = useState(null);
   const gsRef = useRef(null);
   useEffect(() => { gsRef.current = gs; }, [gs]);
-  useEffect(() => {
-    if (gs?.winner?.id && gameId) {
-      setGameWinner(gameId, gs.winner.id).catch(err => {
-        console.error('Failed to save winner:', err);
-      });
-    }
-  }, [gs?.winner?.id, gameId]);
   const processingRef = useRef(false);
   const timers = useRef({});
   const localActionIds = useRef(new Set());
@@ -168,6 +161,13 @@ export default function App() {
   const paramGameId = rawGameId && isUuid(rawGameId) ? rawGameId : null;
   const [activeGameId, setActiveGameId] = useState(null);
   const gameId = activeGameId || paramGameId;  // Use active state if set, otherwise fall back to URL params
+  useEffect(() => {
+    if (gs?.winner?.id && gameId) {
+      setGameWinner(gameId, gs.winner.id).catch(err => {
+        console.error('Failed to save winner:', err);
+      });
+    }
+  }, [gs?.winner?.id, gameId]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [requiresAdmin, setRequiresAdmin] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
