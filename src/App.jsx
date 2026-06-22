@@ -1259,8 +1259,19 @@ export default function App() {
 
               const newTeams = [...prev.teams];
               newTeams[teamIdx] = { ...t, board, completedPositions: resolvedPositions, replacedPositions: resolvedReplaced };
-              
-              return { ...prev, teams: newTeams };
+
+              let winner = prev.winner;
+              if (!winner) {
+                const updated = newTeams[teamIdx];
+                const boardCleared = updated.board.every(row => row.every(tl => tl.completed || tl.flipped));
+                const tasksExhausted = !prev.settings.replacement || updated.exhaustedTasks.length >= prev.settings.tasks.length;
+                if (boardCleared && tasksExhausted) {
+                  console.log('[tile-click] board cleared — team', teamId, 'wins');
+                  winner = updated;
+                }
+              }
+
+              return { ...prev, teams: newTeams, winner: winner || null };
             });
           } catch (err) {
             console.error('[tile-click] error in replacement reveal timer:', err);

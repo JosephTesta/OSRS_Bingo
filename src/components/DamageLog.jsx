@@ -6,7 +6,7 @@ export function DamageLog({ log }) {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [log.length]);
   return (
-    <div ref={ref} className="panel" style={{ height: 90, overflowY: "auto", borderTop: "none", borderRadius: "0 0 3px 3px" }}>
+    <div ref={ref} className="panel" style={{ height: 68, overflowY: "auto", borderTop: "none", borderRadius: "0 0 3px 3px" }}>
       {log.length === 0 ? (
         <div style={{ textAlign: "center", color: "#2a1a00", padding: "6px 0", fontSize: 11 }}>No activity…</div>
       ) : (

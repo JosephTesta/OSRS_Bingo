@@ -28,11 +28,6 @@ export function GameView({ gs, dispatch, onReset, onNewGame, onExport, onShowPas
           <button className="btn btn-blue" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setShowShareModal(true)}>
             🔗 Share
           </button>
-          {isAdmin && (
-            <button className="btn btn-red" style={{ fontSize: 11, padding: "6px 14px" }} onClick={onReset}>
-              ↩ Reset
-            </button>
-          )}
           {gameId && requiresAdmin && !isAdmin && (
             <button onClick={onShowPasswordPrompt} className="btn btn-amber" style={{ fontSize: 10, padding: "5px 10px" }}>
               Admin Login

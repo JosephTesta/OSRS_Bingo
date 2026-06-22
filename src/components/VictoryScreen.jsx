@@ -14,7 +14,9 @@ export function VictoryScreen({ winner, onReset }) {
         </h2>
         <div className="cf" style={{ fontSize: 20, color: "#e8d5a0", marginBottom: 6 }}>{winner.name}</div>
         <div style={{ fontSize: 14, color: "#5a4020", fontStyle: "italic", marginBottom: 28 }}>
-          has vanquished all bosses and claimed eternal glory!
+          {winner.bosses?.every(b => b.defeated)
+            ? "has vanquished all bosses and claimed eternal glory!"
+            : "has cleared every tile on the board!"}
         </div>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <button className="btn btn-blue" onClick={() => setShowShareModal(true)}>
