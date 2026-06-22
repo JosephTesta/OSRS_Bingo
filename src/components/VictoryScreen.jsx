@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export function VictoryScreen({ winner, onReset }) {
+export function VictoryScreen({ winner, onReset, onViewBoard }) {
   const [showShareModal, setShowShareModal] = useState(false);
   const shareUrl = window.location.href;
 
@@ -19,6 +19,9 @@ export function VictoryScreen({ winner, onReset }) {
             : "has cleared every tile on the board!"}
         </div>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          <button className="btn" onClick={onViewBoard}>
+            View Board
+          </button>
           <button className="btn btn-blue" onClick={() => setShowShareModal(true)}>
             🔗 Share
           </button>

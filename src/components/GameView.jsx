@@ -1,10 +1,15 @@
 import { TeamCard } from "./TeamCard";
 import { VictoryScreen } from "./VictoryScreen";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function GameView({ gs, dispatch, onReset, onNewGame, onExport, onShowPasswordPrompt, onAdminLogout, isAdmin = true, requiresAdmin = true, gameId }) {
   const { teams, winner } = gs;
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showVictory, setShowVictory] = useState(true);
+
+  useEffect(() => {
+    if (winner) setShowVictory(true);
+  }, [winner]);
 
   const shareUrl = window.location.href;
 
@@ -47,6 +52,17 @@ export function GameView({ gs, dispatch, onReset, onNewGame, onExport, onShowPas
         </div>
       </div>
 
+      {winner && !showVictory && (
+        <div style={{ textAlign: "center", padding: "8px 0", borderBottom: "1px solid #3a2800", marginBottom: 10 }}>
+          <span className="cf" style={{ color: "#c8a951", fontSize: 13, fontWeight: 700 }}>
+            🏆 {winner.name} Wins! —{" "}
+          </span>
+          <button onClick={() => setShowVictory(true)} style={{ background: "none", border: "none", color: "#f59e0b", cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
+            View Victory Screen
+          </button>
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 380px))", gap: 10, justifyContent: "center" }}>
         {teams.map(team => (
           <TeamCard
@@ -62,7 +78,7 @@ export function GameView({ gs, dispatch, onReset, onNewGame, onExport, onShowPas
         ))}
       </div>
 
-      {winner && <VictoryScreen winner={winner} onReset={onReset} />}
+      {winner && showVictory && <VictoryScreen winner={winner} onReset={onReset} onViewBoard={() => setShowVictory(false)} />}
 
       {showShareModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setShowShareModal(false)}>
