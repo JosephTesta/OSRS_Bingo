@@ -179,6 +179,7 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   }, []);
   const [persistentNote, setPersistentNote] = useState(null);
+  const [savedSettings, setSavedSettings] = useState(null);
 
   useEffect(() => {
     const el = document.createElement("style");
@@ -579,6 +580,25 @@ export default function App() {
       alert("Failed to save game to database. Game will work locally but won't be shareable.");
     }
     
+    setSavedSettings({
+      selectedBossIds: selectedBosses.map(b => b.id),
+      teamNames,
+      teamCount: teamNames.length,
+      dMin: settings.dMin,
+      dMax: settings.dMax,
+      dMinRaw: String(settings.dMin),
+      dMaxRaw: String(settings.dMax),
+      randomizeDamage: settings.randomizeDamage,
+      fixedDamage: settings.fixedDamage,
+      fixedDamageRaw: String(settings.fixedDamage),
+      randomizeBoard: settings.randomizeBoard,
+      replacement: settings.replacement,
+      sequential: settings.sequential,
+      rowBonusDamage: settings.rowBonusDamage,
+      enableRowBonus: settings.enableRowBonus,
+      adminPassword: settings.adminPassword?.trim() || "",
+      tasks: settings.tasks,
+    });
     setGs(newGs);
     setPhase("game");
   }, []);
@@ -1328,6 +1348,23 @@ export default function App() {
     setRequiresAdmin(false);
   }, [gameId]);
 
+  const handleCopySettings = useCallback(() => {
+    if (!savedSettings) return;
+    Object.values(timers.current).forEach(clearTimeout);
+    timers.current = {};
+    if (gameId) {
+      localStorage.removeItem(`admin_${gameId}`);
+      window.history.replaceState(null, "", "/");
+    } else {
+      try { localStorage.clear(); } catch {}
+    }
+    setGs(null);
+    setActiveGameId(null);
+    setPhase("setup");
+    setIsAdmin(false);
+    setRequiresAdmin(false);
+  }, [gameId, savedSettings]);
+
   const handleReset = useCallback(() => {
     if (!gs) return;
     const ok = window.confirm("Reset this game? All progress for all teams will be cleared. This cannot be undone.");
@@ -1378,13 +1415,14 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#060300" }}>
-      {phase === "setup" && <AdminPanel onStart={handleStart} />}
+      {phase === "setup" && <AdminPanel key={savedSettings ? "copy" : "blank"} onStart={handleStart} initialSettings={savedSettings} />}
       {phase === "game" && gs && (
         <GameView 
           gs={gs} 
           dispatch={dispatch} 
           onReset={handleReset}
           onNewGame={handleNewGame}
+          onCopySettings={handleCopySettings}
           onExport={handleExport} 
           isAdmin={isAdmin}
           requiresAdmin={requiresAdmin}

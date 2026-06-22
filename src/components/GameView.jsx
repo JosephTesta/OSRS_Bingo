@@ -2,7 +2,7 @@ import { TeamCard } from "./TeamCard";
 import { VictoryScreen } from "./VictoryScreen";
 import { useState, useEffect } from "react";
 
-export function GameView({ gs, dispatch, onReset, onNewGame, onExport, onShowPasswordPrompt, onAdminLogout, isAdmin = true, requiresAdmin = true, gameId }) {
+export function GameView({ gs, dispatch, onReset, onNewGame, onCopySettings, onExport, onShowPasswordPrompt, onAdminLogout, isAdmin = true, requiresAdmin = true, gameId }) {
   const { teams, winner } = gs;
   const [showShareModal, setShowShareModal] = useState(false);
   const [showVictory, setShowVictory] = useState(true);
@@ -78,7 +78,7 @@ export function GameView({ gs, dispatch, onReset, onNewGame, onExport, onShowPas
         ))}
       </div>
 
-      {winner && showVictory && <VictoryScreen winner={winner} onReset={onReset} onViewBoard={() => setShowVictory(false)} />}
+      {winner && showVictory && <VictoryScreen winner={winner} onNewGame={onNewGame} onCopySettings={onCopySettings} onViewBoard={() => setShowVictory(false)} />}
 
       {showShareModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setShowShareModal(false)}>

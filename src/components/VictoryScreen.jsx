@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export function VictoryScreen({ winner, onReset, onViewBoard }) {
+export function VictoryScreen({ winner, onNewGame, onCopySettings, onViewBoard }) {
   const [showShareModal, setShowShareModal] = useState(false);
   const shareUrl = window.location.href;
 
@@ -25,8 +25,11 @@ export function VictoryScreen({ winner, onReset, onViewBoard }) {
           <button className="btn btn-blue" onClick={() => setShowShareModal(true)}>
             🔗 Share
           </button>
-          <button className="btn btn-red" onClick={onReset}>
-            ↩ New Event
+          <button className="btn btn-amber" onClick={onCopySettings}>
+            📋 Copy Settings
+          </button>
+          <button className="btn btn-red" onClick={onNewGame}>
+            ✚ New Game
           </button>
         </div>
       </div>

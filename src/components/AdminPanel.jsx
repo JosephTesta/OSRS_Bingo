@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TASKS } from "../data/tasks";
 import { BOSSES_DATA } from "../data/bosses";
 
-export function AdminPanel({ onStart }) {
+export function AdminPanel({ onStart, initialSettings }) {
   const [tab, setTab] = useState("bosses");
   const [selBosses, setSelBosses] = useState(["zulrah", "vorkath"]);
   const [teamCount, setTeamCount] = useState(2);
@@ -69,6 +69,36 @@ export function AdminPanel({ onStart }) {
     setTasks(newTaskDescriptions);
     setTaskText(newTaskDescriptions.join("\n"));
   }, [taskDifficulties, taskCategories]);
+
+  useEffect(() => {
+    if (!initialSettings) return;
+    setSelBosses(initialSettings.selectedBossIds || []);
+    setTeamCount(initialSettings.teamCount ?? 2);
+    setTeamNames(() => {
+      const names = initialSettings.teamNames || [];
+      const defaults = ["Team Alpha", "Team Bravo", "Team Charlie", "Team Delta", "Team Echo", "Team Foxtrot"];
+      const result = names.slice(0, 6);
+      for (let i = result.length; i < 6; i++) result.push(defaults[i]);
+      return result;
+    });
+    setDMin(initialSettings.dMin ?? 50);
+    setDMax(initialSettings.dMax ?? 200);
+    setDMinRaw(initialSettings.dMinRaw ?? "50");
+    setDMaxRaw(initialSettings.dMaxRaw ?? "200");
+    setRandomizeDamage(initialSettings.randomizeDamage ?? true);
+    setFixedDamage(initialSettings.fixedDamage ?? 100);
+    setFixedDamageRaw(initialSettings.fixedDamageRaw ?? "100");
+    setRandomizeBoard(initialSettings.randomizeBoard ?? true);
+    setReplacement(initialSettings.replacement ?? true);
+    setSequential(initialSettings.sequential ?? true);
+    setRowBonusDamage(initialSettings.rowBonusDamage ?? 50);
+    setEnableRowBonus(initialSettings.enableRowBonus ?? true);
+    setAdminPassword(initialSettings.adminPassword ?? "");
+    if (initialSettings.tasks) {
+      setTasks(initialSettings.tasks);
+      setTaskText(initialSettings.tasks.join("\n"));
+    }
+  }, [initialSettings]);
 
   const handleTaskChange = val => {
     setTaskText(val);
