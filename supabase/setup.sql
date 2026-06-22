@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS games (
   admin_password_hash TEXT NOT NULL,
   settings JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  is_active BOOLEAN DEFAULT TRUE
+  is_active BOOLEAN DEFAULT TRUE,
+  winner UUID
 );
 
 CREATE TABLE IF NOT EXISTS teams (

@@ -4,7 +4,7 @@ import { DEFAULT_TASKS } from "./data/tasks";
 import { BOSSES_DATA } from "./data/bosses";
 import { AdminPanel } from "./components/AdminPanel";
 import { GameView } from "./components/GameView";
-import { getGame, getTeams, getTeam, verifyAdminPassword, createGame, createTeam, saveUndoState, applyTileAction } from "./lib/api";
+import { getGame, getTeams, getTeam, verifyAdminPassword, createGame, createTeam, saveUndoState, applyTileAction, setGameWinner } from "./lib/api";
 import { supabase } from "./lib/supabase";
 
 const uid     = () => Math.random().toString(36).slice(2, 9);
@@ -153,6 +153,13 @@ export default function App() {
   const [gs, setGs] = useState(null);
   const gsRef = useRef(null);
   useEffect(() => { gsRef.current = gs; }, [gs]);
+  useEffect(() => {
+    if (gs?.winner?.id && gameId) {
+      setGameWinner(gameId, gs.winner.id).catch(err => {
+        console.error('Failed to save winner:', err);
+      });
+    }
+  }, [gs?.winner?.id, gameId]);
   const processingRef = useRef(false);
   const timers = useRef({});
   const localActionIds = useRef(new Set());
@@ -230,10 +237,12 @@ export default function App() {
       setIsAdmin(!requiresPassword);
 
       const teams = await getTeams(gameId);
+      const loadedTeams = teams.map(transformTeam);
+      const savedWinner = game.winner ? loadedTeams.find(t => t.id === game.winner) : null;
       setGs({
         settings: game.settings,
-        teams: teams.map(transformTeam),
-        winner: null,
+        teams: loadedTeams,
+        winner: savedWinner || null,
         undoFlashTeamId: null,
       });
       setPhase("game");

@@ -55,6 +55,14 @@ export async function verifyAdminPassword(gameId, password) {
   }
 }
 
+export async function setGameWinner(gameId, teamId) {
+  const { error } = await supabase
+    .from('games')
+    .update({ winner: teamId })
+    .eq('id', gameId);
+  if (error) throw error;
+}
+
 export async function updateGameSettings(gameId, settings) {
   const { error } = await supabase
     .from('games')
