@@ -2,28 +2,52 @@ import { TeamCard } from "./TeamCard";
 import { VictoryScreen } from "./VictoryScreen";
 import { useState } from "react";
 
-export function GameView({ gs, dispatch, onReset, onExport, isAdmin = true, requiresAdmin = true }) {
+export function GameView({ gs, dispatch, onReset, onNewGame, onExport, onShowPasswordPrompt, onAdminLogout, isAdmin = true, requiresAdmin = true, gameId }) {
   const { teams, winner } = gs;
   const [showShareModal, setShowShareModal] = useState(false);
 
   const shareUrl = window.location.href;
 
+  const handleNewGame = () => {
+    if (gs.teams.some(t => (t.log?.length ?? 0) > 0)) {
+      if (!window.confirm("Start a new game? Current progress will be lost.")) return;
+    }
+    onNewGame();
+  };
+
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: "10px 10px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <h1 className="cf" style={{ fontSize: "clamp(15px,2.8vw,24px)", color: "#c8a951", fontWeight: 900, textShadow: "2px 2px 0 #000" }}>
           ⚔ OSRS Bingo Boss Event
         </h1>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn" style={{ fontSize: 11, padding: "6px 14px" }} onClick={handleNewGame}>
+            New Game
+          </button>
           <button className="btn btn-blue" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setShowShareModal(true)}>
             🔗 Share
           </button>
           {isAdmin && (
-            <>
-              <button className="btn btn-red" style={{ fontSize: 11, padding: "6px 14px" }} onClick={onReset}>
-                ↩ Reset
-              </button>
-            </>
+            <button className="btn btn-red" style={{ fontSize: 11, padding: "6px 14px" }} onClick={onReset}>
+              ↩ Reset
+            </button>
+          )}
+          {gameId && requiresAdmin && !isAdmin && (
+            <button onClick={onShowPasswordPrompt} className="btn btn-amber" style={{ fontSize: 10, padding: "5px 10px" }}>
+              Admin Login
+            </button>
+          )}
+          {gameId && requiresAdmin && isAdmin && (
+            <span style={{ color: "#86efac", fontSize: 12 }}>Admin Mode</span>
+          )}
+          {gameId && !requiresAdmin && isAdmin && (
+            <span style={{ color: "#86efac", fontSize: 12 }}>Edit Mode</span>
+          )}
+          {gameId && isAdmin && requiresAdmin && (
+            <button onClick={onAdminLogout} style={{ background: "none", border: "none", color: "#5a4020", cursor: "pointer", fontSize: 11 }}>
+              Logout
+            </button>
           )}
         </div>
       </div>

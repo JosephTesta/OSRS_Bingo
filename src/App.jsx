@@ -1292,7 +1292,7 @@ export default function App() {
     }
   }, [isAdmin, gameId]);
 
-  const handleReset = useCallback(() => {
+  const handleNewGame = useCallback(() => {
     Object.values(timers.current).forEach(clearTimeout);
     timers.current = {};
     if (gameId) {
@@ -1307,6 +1307,33 @@ export default function App() {
     setIsAdmin(false);
     setRequiresAdmin(false);
   }, [gameId]);
+
+  const handleReset = useCallback(() => {
+    if (!gs) return;
+    const ok = window.confirm("Reset this game? All progress for all teams will be cleared. This cannot be undone.");
+    if (!ok) return;
+    Object.values(timers.current).forEach(clearTimeout);
+    timers.current = {};
+    setGs(prev => {
+      if (!prev) return prev;
+      const resetTeams = prev.teams.map(t => ({
+        ...t,
+        board:           t.board.map(row => row.map(tile => ({ ...tile, flipped: false, completed: false, pendingReplacement: null, isNew: false }))),
+        bosses:          t.bosses.map(b => ({ ...b, currentHp: b.maxHp, defeated: false })),
+        log:             [],
+        damageFloats:    [],
+        history:         [],
+        completedPositions:     Array(25).fill(false),
+        replacedPositions:      Array(25).fill(false),
+        lineCompletedPositions: Array(25).fill(false),
+        exhaustedTasks:         [...prev.settings.tasks],
+        activeBossIndex:        0,
+        hasRemoteUpdate:        false,
+        remoteFlashPositions:   [],
+      }));
+      return { ...prev, teams: resetTeams, winner: null };
+    });
+  }, [gs]);
 
   const handleExport = useCallback(() => {
     if (!gs) return;
@@ -1333,35 +1360,18 @@ export default function App() {
     <div style={{ minHeight: "100vh", background: "#060300" }}>
       {phase === "setup" && <AdminPanel onStart={handleStart} />}
       {phase === "game" && gs && (
-        <>
-          {gameId && (
-            <div style={{ padding: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #3a2800" }}>
-              <a href="/" onClick={(e) => { e.preventDefault(); window.history.replaceState(null, "", "/"); setGs(null); setActiveGameId(null); setPhase("setup"); setIsAdmin(false); setRequiresAdmin(false); }} style={{ color: "#c8a951", textDecoration: "none", cursor: "pointer" }}>Create New Game</a>
-              {requiresAdmin && !isAdmin && (
-                <button onClick={() => setShowPasswordPrompt(true)} className="btn btn-amber" style={{ fontSize: "10px", padding: "5px 10px" }}>
-                  Admin Login
-                </button>
-              )}
-              {requiresAdmin && isAdmin && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "#86efac", fontSize: "12px" }}>Admin Mode</span>
-                  <button onClick={() => { setIsAdmin(false); localStorage.removeItem(`admin_${gameId}`); window.location.reload(); }} style={{ background: "none", border: "none", color: "#5a4020", cursor: "pointer", fontSize: 11 }}>Logout</button>
-                </div>
-              )}
-              {!requiresAdmin && isAdmin && (
-                <span style={{ color: "#86efac", fontSize: "12px" }}>Edit Mode</span>
-              )}
-            </div>
-          )}
-          <GameView 
-            gs={gs} 
-            dispatch={dispatch} 
-            onReset={handleReset} 
-            onExport={handleExport} 
-            isAdmin={isAdmin}
-            requiresAdmin={requiresAdmin}
-          />
-        </>
+        <GameView 
+          gs={gs} 
+          dispatch={dispatch} 
+          onReset={handleReset}
+          onNewGame={handleNewGame}
+          onExport={handleExport} 
+          isAdmin={isAdmin}
+          requiresAdmin={requiresAdmin}
+          gameId={gameId}
+          onShowPasswordPrompt={() => setShowPasswordPrompt(true)}
+          onAdminLogout={() => { setIsAdmin(false); localStorage.removeItem(`admin_${gameId}`); window.location.reload(); }}
+        />
       )}
       {toast && (
         <div className="toast-container" key={toast.id}>
