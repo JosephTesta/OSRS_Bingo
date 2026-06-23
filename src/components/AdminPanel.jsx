@@ -138,7 +138,7 @@ export function AdminPanel({ onStart, initialSettings }) {
             marginBottom: 8,
           }}
         >
-          ⚔ OSRS BINGO BOSS EVENT ⚔
+          ⚔ OSRS BOSS BINGO ⚔
         </h1>
         <p style={{ color: "#5a4020", fontSize: 14, fontStyle: "italic" }}>Configure your teams, select your prey, and let the chaos begin.</p>
       </div>

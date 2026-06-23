@@ -24,7 +24,7 @@ export function GameView({ gs, dispatch, onReset, onNewGame, onCopySettings, onE
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: "10px 10px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <h1 className="cf" style={{ fontSize: "clamp(15px,2.8vw,24px)", color: "#c8a951", fontWeight: 900, textShadow: "2px 2px 0 #000" }}>
-          ⚔ OSRS Boss Bingo ⚔
+          ⚔ OSRS BOSS BINGO ⚔
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <button className="btn" style={{ fontSize: 11, padding: "6px 14px" }} onClick={handleNewGame}>
