@@ -146,6 +146,9 @@ textarea{resize:vertical;}
 
 .toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;font-family:'Cinzel',serif;pointer-events:none;animation:toastIn .3s ease-out;}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+
+.rs-char{animation:charBob 4s ease-in-out infinite;pointer-events:none;}
+@keyframes charBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
 `;
 
 export default function App() {
@@ -1454,6 +1457,25 @@ export default function App() {
           onAdminLogout={() => { setIsAdmin(false); localStorage.removeItem(`admin_${gameId}`); window.location.reload(); }}
         />
       )}
+      <div className="rs-char" style={{ position: "fixed", bottom: 12, left: 12, zIndex: 1, opacity: 0.35 }}>
+        <svg width="42" height="56" viewBox="0 0 42 56" fill="none">
+          <path d="M21 24L30 50L12 50Z" fill="#8B0000" opacity="0.7"/>
+          <rect x="14" y="36" width="6" height="14" rx="1" fill="#4A5568"/>
+          <rect x="22" y="36" width="6" height="14" rx="1" fill="#4A5568"/>
+          <rect x="13" y="48" width="8" height="4" rx="1" fill="#5C3A1E"/>
+          <rect x="21" y="48" width="8" height="4" rx="1" fill="#5C3A1E"/>
+          <rect x="12" y="22" width="18" height="16" rx="2" fill="#4A5568"/>
+          <rect x="6" y="23" width="6" height="11" rx="1" fill="#4A5568"/>
+          <rect x="30" y="23" width="6" height="11" rx="1" fill="#4A5568"/>
+          <rect x="34" y="18" width="2" height="17" rx="1" fill="#C0C0C0"/>
+          <rect x="32" y="16" width="6" height="3" rx="1" fill="#5C3A1E"/>
+          <rect x="14" y="9" width="14" height="13" rx="2" fill="#4A5568"/>
+          <rect x="18" y="14" width="6" height="2" rx="0.5" fill="#1A202C"/>
+          <rect x="18.5" y="14" width="1.5" height="2" rx="0.5" fill="#FFD700"/>
+          <rect x="22" y="14" width="1.5" height="2" rx="0.5" fill="#FFD700"/>
+          <path d="M21 9L18 3L24 3Z" fill="#DC2626"/>
+        </svg>
+      </div>
       {toast && (
         <div className="toast-container" key={toast.id}>
           <div style={{
