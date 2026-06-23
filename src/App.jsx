@@ -168,6 +168,21 @@ export default function App() {
       });
     }
   }, [gs?.winner?.id, gameId]);
+
+  // Safety net: check for tile-completion win after every state change
+  useEffect(() => {
+    if (!gs || gs.winner) return;
+    for (const team of gs.teams) {
+      const boardCleared = team.board.every(row => row.every(tl => tl.completed || tl.flipped));
+      const tasksExhausted = !gs.settings.replacement || team.exhaustedTasks.length >= gs.settings.tasks.length;
+      if (boardCleared && tasksExhausted) {
+        console.log('[win-check] board cleared — team', team.id, 'wins via effect');
+        setGs(prev => prev && !prev.winner ? { ...prev, winner: team } : prev);
+        break;
+      }
+    }
+  }, [gs]);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [requiresAdmin, setRequiresAdmin] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
