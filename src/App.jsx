@@ -1194,7 +1194,14 @@ export default function App() {
         };
 
         const newTeams = g.teams.map(t => t.id === teamId ? updatedTeam : t);
-        const winnerTeam = !g.winner && allBossesDefeated ? updatedTeam : g.winner;
+        let winnerTeam = !g.winner && allBossesDefeated ? updatedTeam : g.winner;
+        if (!winnerTeam && !pendingReplacement) {
+          const boardCleared = newBoard.every(row => row.every(tl => tl.completed || tl.flipped));
+          const tasksExhausted = !g.settings.replacement || newExhaustedTasks.length >= g.settings.tasks.length;
+          if (boardCleared && tasksExhausted) {
+            winnerTeam = updatedTeam;
+          }
+        }
         const newGs = { ...g, teams: newTeams, winner: winnerTeam || null };
 
         if (gameId && isAdmin) {
