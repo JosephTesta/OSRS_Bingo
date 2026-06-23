@@ -1193,9 +1193,16 @@ export default function App() {
           hasRemoteUpdate:        false,
         };
 
-        const newTeams    = g.teams.map(t => t.id === teamId ? updatedTeam : t);
-        const winnerTeam  = !g.winner && allBossesDefeated ? updatedTeam : g.winner;
-        const newGs       = { ...g, teams: newTeams, winner: winnerTeam || null };
+        const newTeams = g.teams.map(t => t.id === teamId ? updatedTeam : t);
+        let winnerTeam = !g.winner && allBossesDefeated ? updatedTeam : g.winner;
+        if (!winnerTeam && !pendingReplacement) {
+          const allPositionsCompleted = newCompletedPositions.every((p, i) => p || newReplacedPositions[i]);
+          const tasksExhausted = !g.settings.replacement || newExhaustedTasks.length >= g.settings.tasks.length;
+          if (allPositionsCompleted && tasksExhausted) {
+            winnerTeam = updatedTeam;
+          }
+        }
+        const newGs = { ...g, teams: newTeams, winner: winnerTeam || null };
 
         if (gameId && isAdmin) {
           const actionPayload = {
@@ -1292,10 +1299,10 @@ export default function App() {
               let winner = prev.winner;
               if (!winner) {
                 const updated = newTeams[teamIdx];
-                const boardCleared = updated.board.every(row => row.every(tl => tl.completed || tl.flipped));
+                const allPositionsCompleted = updated.completedPositions.every((p, i) => p || updated.replacedPositions[i]);
                 const tasksExhausted = !prev.settings.replacement || updated.exhaustedTasks.length >= prev.settings.tasks.length;
-                if (boardCleared && tasksExhausted) {
-                  console.log('[tile-click] board cleared — team', teamId, 'wins');
+                if (allPositionsCompleted && tasksExhausted) {
+                  console.log('[tile-click] all positions completed, tasks exhausted — team', teamId, 'wins');
                   winner = updated;
                 }
               }

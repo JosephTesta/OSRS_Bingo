@@ -198,11 +198,20 @@ export const useGameStore = create<GameStore>()(
           // Update board with wasCompleted tracking
           let newBoard = [...t.board];
           if (state.settings.tileReplacement) {
-            const currentTaskIds = newBoard.filter((_, i) => i !== tileIndex).map(tile => tile.task.id);
-            const newTile = generateNewTile(state.taskPool, state.settings.damageMin, state.settings.damageMax, currentTaskIds);
-            newBoard[tileIndex] = newTile;
-            // Mark the original tile as having been completed before replacement
-            newBoard[tileIndex] = { ...newTile, wasCompleted: true };
+            const usedTaskIds = new Set(state.completedTaskIds);
+            usedTaskIds.add(tile.task.id);
+            const allTasksExhausted = state.taskPool.every(t => usedTaskIds.has(t.id));
+
+            if (allTasksExhausted) {
+              // All tasks in the pool have been used — tile stays completed
+              newBoard[tileIndex] = { ...tile, completed: true, isFlipping: false };
+            } else {
+              const currentTaskIds = newBoard.filter((_, i) => i !== tileIndex).map(tile => tile.task.id);
+              const newTile = generateNewTile(state.taskPool, state.settings.damageMin, state.settings.damageMax, currentTaskIds);
+              newBoard[tileIndex] = newTile;
+              // Mark the original tile as having been completed before replacement
+              newBoard[tileIndex] = { ...newTile, wasCompleted: true };
+            }
           } else {
             newBoard[tileIndex] = { ...tile, completed: true, isFlipping: false };
           }
@@ -224,14 +233,13 @@ export const useGameStore = create<GameStore>()(
 
           // Victory rules:
           // - Win if all bosses are defeated
-          // - OR when tile replacement is enabled: win once the team has completed 25 or more tiles cumulatively
-          // - OR when tile replacement is disabled: win when all 25 tiles on the current board are completed
+          // - OR when all 25 tiles on the board are completed (works for both replacement and non-replacement modes)
+          // - OR when tile replacement is enabled: win once the team has completed 25+ tiles cumulatively
           const bossesDefeated = updatedBosses.every(b => b.isDefeated);
-          const tileReplacementEnabled = state.settings.tileReplacement;
           const tilesCompletedCumulative = tentativeTeam.completedTasks;
           const allTilesCompletedNow = tentativeTeam.board.every(tile => tile.completed === true);
 
-          const tileWin = tileReplacementEnabled ? (tilesCompletedCumulative >= 25) : allTilesCompletedNow;
+          const tileWin = allTilesCompletedNow || (state.settings.tileReplacement && tilesCompletedCumulative >= 25);
           const hasWon = bossesDefeated || tileWin;
           const reason: 'bosses' | 'tiles' | undefined = bossesDefeated ? 'bosses' : tileWin ? 'tiles' : undefined;
 
