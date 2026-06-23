@@ -41,9 +41,6 @@ export function GameView({ gs, dispatch, onReset, onNewGame, onCopySettings, onE
           {gameId && requiresAdmin && isAdmin && (
             <span style={{ color: "#86efac", fontSize: 12 }}>Admin Mode</span>
           )}
-          {gameId && !requiresAdmin && isAdmin && (
-            <span style={{ color: "#86efac", fontSize: 12 }}>Edit Mode</span>
-          )}
           {gameId && isAdmin && requiresAdmin && (
             <button onClick={onAdminLogout} style={{ background: "none", border: "none", color: "#5a4020", cursor: "pointer", fontSize: 11 }}>
               Logout
