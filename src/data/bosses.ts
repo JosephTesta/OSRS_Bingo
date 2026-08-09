@@ -17,8 +17,8 @@ export const DEFAULT_BOSSES = [
   { id: "zuk",      name: "TzKal-Zuk",        maxHp: 1200, img: "/bosses/zuk.png" },
   { id: "cox",      name: "Great Olm",        maxHp: 1500, img: "/bosses/cox.png" },
   { id: "tob",      name: "Verzik Vitur",     maxHp: 1800, img: "/bosses/tob.png" },
-  { id: "corp",     name: "Corp Beast",       maxHp: 2000, img: "/bosses/corp.png" },
   { id: "warden",   name: "Tumeken's Warden", maxHp: 1900, img: "/bosses/warden.png" },
+  { id: "corp",     name: "Corp Beast",       maxHp: 2000, img: "/bosses/corp.png" },
 ];
 
 export const BOSSES_DATA = DEFAULT_BOSSES;
